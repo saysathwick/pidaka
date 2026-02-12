@@ -1,0 +1,265 @@
+Replit Prompt — Anonymous Social Wall App (“Pidaka”)
+
+Build a full-stack anonymous social media web application called Pidaka Wall with the following requirements.
+
+App Concept
+
+This is a fully anonymous public wall where users post short text messages called Pidakas.
+
+Users never know each other’s identity.
+
+No profile viewing, no followers, no friends.
+
+Only a shared wall of posts.
+
+Posts disappear after 48 hours.
+
+Users can anonymously respond to a post using a feature called Burn.
+
+The platform is designed for anonymous opinions from strangers.
+
+Tech Stack
+
+Use:
+
+Frontend: React (Vite preferred)
+
+Backend: Node.js + Express
+
+Database: PostgreSQL (or SQLite if simpler)
+
+Authentication: JWT based
+
+Deployment ready structure
+
+Clean folder structure and comments.
+
+Core Features
+1. User Registration
+
+When user opens the app:
+
+User registers with:
+
+email
+
+password
+
+After registration:
+
+System generates a random unique anonymous username
+
+Username rules:
+
+Auto-generated
+
+Cannot be edited
+
+Not derived from email/name
+
+Completely anonymous
+
+Example format: pidaka_83XK21
+
+Store:
+
+id
+email
+password_hash
+anonymous_name
+created_at
+
+
+No profile page required.
+
+2. Authentication
+
+Login / register
+
+JWT session handling
+
+Protected routes
+
+No password reset required for MVP
+
+3. Wall (Main Feature)
+
+After login user sees:
+
+Global Wall showing all pidakas
+
+Each pidaka shows:
+
+text content (max 500 characters)
+
+posted time
+
+burn button
+
+NO user identity shown
+
+NO likes
+
+NO comments
+
+NO metadata
+
+Rules:
+
+All users see same wall
+
+No filtering
+
+No personalization
+
+Latest posts first
+
+Post automatically deleted after 48 hours
+
+4. Create Pidaka
+
+User can:
+
+create text post
+
+500 character limit
+
+text only (no media)
+
+appears instantly on wall
+
+Database:
+
+id
+content
+creator_user_id
+created_at
+expires_at (48 hours)
+
+5. Burn Feature (Anonymous Message to Poster)
+
+Under each pidaka:
+
+Burn button
+
+When clicked:
+
+Opens message box
+
+User sends anonymous message to pidaka creator
+
+Creator does NOT know who sent it
+
+Sender does NOT know who creator is
+
+Pure anonymous communication
+
+Database:
+
+id
+pidaka_id
+sender_user_id
+receiver_user_id
+message
+created_at
+
+
+Add:
+
+basic inbox page where user sees burns received
+
+show message only (no sender info)
+
+6. Auto Expiry System
+
+Implement:
+
+background job / cron
+
+deletes pidakas older than 48 hours
+
+deletes related burns if pidaka removed
+
+7. UI Requirements
+
+Minimal clean interface:
+
+Pages:
+
+Register
+
+Login
+
+Wall
+
+Create Pidaka input box
+
+Burn popup
+
+Inbox (received burns)
+
+Design:
+
+simple
+
+dark mode friendly
+
+mobile responsive
+
+8. Security Rules
+
+Never expose user identity
+
+Never expose user IDs in API responses
+
+Validate 500 character limit server side
+
+Rate limit posting (optional basic version)
+
+Hash passwords using bcrypt
+
+9. API Endpoints
+
+Create REST APIs:
+
+POST /auth/register
+POST /auth/login
+
+GET /pidakas
+POST /pidakas
+DELETE /pidakas/:id (auto cleanup only)
+
+POST /burn/:pidakaId
+GET /burns/inbox
+
+10. Extra Requirements
+
+Use MVC structure
+
+Clear database schema
+
+Error handling
+
+Environment variables
+
+README explaining how to run
+
+Output Requirements
+
+Generate:
+
+complete backend
+
+complete frontend
+
+database schema
+
+setup instructions
+
+seed script
+
+example UI
+
+Make sure the app runs locally after install.
+
+If anything is unclear, make reasonable assumptions.
