@@ -14,6 +14,8 @@ export function BurningCookieIcon({ className = "h-5 w-5" }: BurningCookieIconPr
       className={className}
     >
       <path d="M12 2c-.5 1.5-.2 3 .5 4s1 2.5.5 4" />
+      <path d="M8.5 5c-.3 1 0 2 .4 2.8s.6 1.8.2 2.7" />
+      <path d="M15.5 5c.3 1 0 2-.4 2.8s-.6 1.8-.2 2.7" />
 
       <ellipse cx="12" cy="15.5" rx="7" ry="5.5" />
 
