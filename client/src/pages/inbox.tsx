@@ -4,7 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Flame, Clock, Inbox as InboxIcon } from "lucide-react";
+import { ArrowLeft, Clock, Inbox as InboxIcon } from "lucide-react";
+import { BurningCookieIcon } from "@/components/burning-cookie-icon";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 
@@ -59,7 +60,7 @@ export default function InboxPage() {
             <Card key={burn.id} data-testid={`card-burn-${burn.id}`}>
               <CardContent className="pt-4 flex flex-col gap-3">
                 <div className="flex items-start gap-2">
-                  <Flame className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  <BurningCookieIcon className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                   <p className="text-sm whitespace-pre-wrap break-words" data-testid={`text-burn-${burn.id}`}>
                     {burn.message}
                   </p>

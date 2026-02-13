@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Flame } from "lucide-react";
+import { BurningCookieIcon } from "@/components/burning-cookie-icon";
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -40,7 +40,7 @@ export default function AuthPage() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center gap-2 mb-6">
           <div className="flex items-center gap-2">
-            <Flame className="h-8 w-8 text-primary" />
+            <BurningCookieIcon className="h-8 w-8 text-primary" />
             <h1 className="text-3xl font-bold tracking-tight">Pidaka</h1>
           </div>
           <p className="text-sm text-muted-foreground text-center">

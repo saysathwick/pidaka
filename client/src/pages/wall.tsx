@@ -15,7 +15,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Flame, Clock, Send, Inbox, Sun, Moon, LogOut, ArrowUp, ArrowDown } from "lucide-react";
+import { Clock, Send, Inbox, Sun, Moon, LogOut, ArrowUp, ArrowDown } from "lucide-react";
+import { BurningCookieIcon } from "@/components/burning-cookie-icon";
 import { useTheme } from "@/lib/theme";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
@@ -98,7 +99,7 @@ export default function WallPage() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-2 px-4 py-3">
           <div className="flex items-center gap-2" data-testid="text-brand">
-            <Flame className="h-5 w-5 text-primary" />
+            <BurningCookieIcon className="h-5 w-5 text-primary" />
             <span className="font-bold text-lg">Pidaka</span>
           </div>
           <div className="flex items-center gap-1 flex-wrap">
@@ -188,7 +189,7 @@ export default function WallPage() {
                       onClick={() => handleBurnClick(pidaka.id)}
                       data-testid={`button-burn-${pidaka.id}`}
                     >
-                      <Flame className="h-3.5 w-3.5 mr-1" />
+                      <BurningCookieIcon className="h-3.5 w-3.5 mr-1" />
                       Burn
                     </Button>
                   </div>
@@ -198,7 +199,7 @@ export default function WallPage() {
           </div>
         ) : (
           <div className="text-center py-12" data-testid="text-empty-wall">
-            <Flame className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+            <BurningCookieIcon className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-muted-foreground text-sm">No pidakas yet. Be the first to post.</p>
           </div>
         )}
@@ -208,7 +209,7 @@ export default function WallPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2" data-testid="text-burn-dialog-title">
-              <Flame className="h-5 w-5 text-primary" />
+              <BurningCookieIcon className="h-5 w-5 text-primary" />
               Send Anonymous Burn
             </DialogTitle>
           </DialogHeader>
@@ -236,7 +237,7 @@ export default function WallPage() {
               disabled={!burnMessage.trim() || sendBurn.isPending}
               data-testid="button-send-burn"
             >
-              <Flame className="h-4 w-4 mr-1.5" />
+              <BurningCookieIcon className="h-4 w-4 mr-1.5" />
               {sendBurn.isPending ? "Sending..." : "Send Burn"}
             </Button>
           </DialogFooter>
