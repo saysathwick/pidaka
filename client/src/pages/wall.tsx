@@ -136,7 +136,7 @@ export default function WallPage() {
         <Card>
           <CardContent className="pt-4 flex flex-col gap-3">
             <Textarea
-              placeholder="What's on your mind? Stay anonymous..."
+              placeholder="Hey stranger? Wanna share?"
               value={newContent}
               onChange={(e) => setNewContent(e.target.value.slice(0, 500))}
               className="resize-none text-sm min-h-[80px]"
