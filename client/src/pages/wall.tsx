@@ -5,7 +5,6 @@ import { useAuth } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -15,7 +14,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, Send, Inbox, Sun, Moon, LogOut, ArrowUp, ArrowDown } from "lucide-react";
+import { Clock, Send, Sun, Moon, LogOut, Zap, MessageCircle } from "lucide-react";
 import { BurningCookieIcon } from "@/components/burning-cookie-icon";
 import { useTheme } from "@/lib/theme";
 import { useLocation } from "wouter";
@@ -92,22 +91,20 @@ export default function WallPage() {
     sendBurn.mutate({ pidakaId: selectedPidakaId, message: burnMessage.trim() });
   };
 
-  const charCount = newContent.length;
-
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-xl">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-2 px-4 py-3">
-          <div className="flex items-center gap-2" data-testid="text-brand">
-            <BurningCookieIcon className="h-5 w-5 text-primary" />
-            <span className="font-bold text-lg">Pidaka</span>
+          <div className="flex items-center gap-2.5" data-testid="text-brand">
+            <div className="relative">
+              <div className="absolute -inset-1 rounded-full bg-primary/20 blur-sm" />
+              <BurningCookieIcon className="h-6 w-6 text-primary relative" />
+            </div>
+            <span className="font-bold text-xl tracking-tight">Pidaka</span>
           </div>
-          <div className="flex items-center gap-1 flex-wrap">
-            <Badge variant="secondary" className="text-xs" data-testid="badge-username">
-              {user?.anonymousName}
-            </Badge>
+          <div className="flex items-center gap-0.5 flex-wrap">
             <Button size="icon" variant="ghost" onClick={() => navigate("/inbox")} data-testid="button-inbox">
-              <Inbox className="h-4 w-4" />
+              <MessageCircle className="h-4 w-4" />
             </Button>
             <Button size="icon" variant="ghost" onClick={toggleTheme} data-testid="button-theme-toggle">
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -119,40 +116,61 @@ export default function WallPage() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-4 flex flex-col gap-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <ArrowUp className="h-4 w-4 text-primary" />
-            <span className="text-sm text-muted-foreground">Burns sent</span>
-            <Badge variant="outline" data-testid="badge-burns-sent">{user?.burnsSentCount ?? 0}</Badge>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <ArrowDown className="h-4 w-4 text-destructive" />
-            <span className="text-sm text-muted-foreground">Burns received</span>
-            <Badge variant="outline" data-testid="badge-burns-received">{user?.burnsReceivedCount ?? 0}</Badge>
-          </div>
+      <main className="max-w-2xl mx-auto px-4 py-5 flex flex-col gap-5">
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="overflow-visible" data-testid="card-burns-sent">
+            <CardContent className="pt-4 pb-4 flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary/10">
+                  <Zap className="h-4 w-4 text-primary" />
+                </div>
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Sent</span>
+              </div>
+              <span className="text-3xl font-bold tracking-tight ml-10" data-testid="text-burns-sent-count">
+                {user?.burnsSentCount ?? 0}
+              </span>
+            </CardContent>
+          </Card>
+          <Card className="overflow-visible" data-testid="card-burns-received">
+            <CardContent className="pt-4 pb-4 flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-8 h-8 rounded-md bg-destructive/10">
+                  <BurningCookieIcon className="h-4 w-4 text-destructive" />
+                </div>
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Received</span>
+              </div>
+              <span className="text-3xl font-bold tracking-tight ml-10" data-testid="text-burns-received-count">
+                {user?.burnsReceivedCount ?? 0}
+              </span>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex items-center gap-2 px-1">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground" data-testid="text-username">
+            {user?.anonymousName}
+          </span>
+          <div className="h-px flex-1 bg-border" />
         </div>
 
         <Card>
-          <CardContent className="pt-4 flex flex-col gap-3">
+          <CardContent className="pt-4 pb-4 flex flex-col gap-3">
             <Textarea
               placeholder="Hey stranger? Wanna share?"
               value={newContent}
               onChange={(e) => setNewContent(e.target.value.slice(0, 500))}
-              className="resize-none text-sm min-h-[80px]"
+              className="resize-none text-sm min-h-[90px] border-0 bg-muted/50 focus-visible:ring-1 focus-visible:ring-primary/30"
               data-testid="input-pidaka-content"
             />
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className={`text-xs ${charCount > 450 ? "text-destructive" : "text-muted-foreground"}`} data-testid="text-char-count">
-                {charCount}/500
-              </span>
+            <div className="flex items-center justify-end">
               <Button
                 onClick={handlePost}
                 disabled={!newContent.trim() || createPidaka.isPending}
                 data-testid="button-post-pidaka"
               >
                 <Send className="h-4 w-4 mr-1.5" />
-                {createPidaka.isPending ? "Posting..." : "Post Pidaka"}
+                {createPidaka.isPending ? "Pasting..." : "Paste Pidaka"}
               </Button>
             </div>
           </CardContent>
@@ -162,10 +180,15 @@ export default function WallPage() {
           <div className="flex flex-col gap-3">
             {[1, 2, 3].map((i) => (
               <Card key={i}>
-                <CardContent className="pt-4 flex flex-col gap-2">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/4 mt-2" />
+                <CardContent className="pt-4 pb-4 flex flex-col gap-3">
+                  <div className="flex items-start gap-3">
+                    <Skeleton className="h-8 w-8 rounded-md shrink-0" />
+                    <div className="flex flex-col gap-2 flex-1">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-3/4" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-3 w-1/4" />
                 </CardContent>
               </Card>
             ))}
@@ -173,9 +196,9 @@ export default function WallPage() {
         ) : pidakas && pidakas.length > 0 ? (
           <div className="flex flex-col gap-3">
             {pidakas.map((pidaka) => (
-              <Card key={pidaka.id} data-testid={`card-pidaka-${pidaka.id}`}>
-                <CardContent className="pt-4 flex flex-col gap-3">
-                  <p className="text-sm whitespace-pre-wrap break-words" data-testid={`text-content-${pidaka.id}`}>
+              <Card key={pidaka.id} className="hover-elevate overflow-visible transition-all duration-200" data-testid={`card-pidaka-${pidaka.id}`}>
+                <CardContent className="pt-4 pb-4 flex flex-col gap-3">
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" data-testid={`text-content-${pidaka.id}`}>
                     {pidaka.content}
                   </p>
                   <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -184,9 +207,10 @@ export default function WallPage() {
                       <span>{formatDistanceToNow(new Date(pidaka.createdAt), { addSuffix: true })}</span>
                     </div>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
                       onClick={() => handleBurnClick(pidaka.id)}
+                      className="text-primary"
                       data-testid={`button-burn-${pidaka.id}`}
                     >
                       <BurningCookieIcon className="h-3.5 w-3.5 mr-1" />
@@ -198,9 +222,15 @@ export default function WallPage() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-12" data-testid="text-empty-wall">
-            <BurningCookieIcon className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground text-sm">No pidakas yet. Be the first to post.</p>
+          <div className="flex flex-col items-center gap-4 py-16" data-testid="text-empty-wall">
+            <div className="relative">
+              <div className="absolute -inset-4 rounded-full bg-primary/5 blur-xl" />
+              <BurningCookieIcon className="h-14 w-14 text-muted-foreground/50 relative" />
+            </div>
+            <div className="text-center flex flex-col gap-1">
+              <p className="text-sm font-medium text-muted-foreground">The wall is empty</p>
+              <p className="text-xs text-muted-foreground/70">Be the first to paste something</p>
+            </div>
           </div>
         )}
       </main>
@@ -208,8 +238,10 @@ export default function WallPage() {
       <Dialog open={burnDialogOpen} onOpenChange={setBurnDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2" data-testid="text-burn-dialog-title">
-              <BurningCookieIcon className="h-5 w-5 text-primary" />
+            <DialogTitle className="flex items-center gap-2.5" data-testid="text-burn-dialog-title">
+              <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary/10">
+                <BurningCookieIcon className="h-4 w-4 text-primary" />
+              </div>
               Send Anonymous Burn
             </DialogTitle>
           </DialogHeader>
@@ -220,14 +252,9 @@ export default function WallPage() {
             placeholder="Write your anonymous message..."
             value={burnMessage}
             onChange={(e) => setBurnMessage(e.target.value.slice(0, 500))}
-            className="resize-none min-h-[100px]"
+            className="resize-none min-h-[100px] border-0 bg-muted/50 focus-visible:ring-1 focus-visible:ring-primary/30"
             data-testid="input-burn-message"
           />
-          <div className="flex justify-between items-center">
-            <span className={`text-xs ${burnMessage.length > 450 ? "text-destructive" : "text-muted-foreground"}`} data-testid="text-burn-char-count">
-              {burnMessage.length}/500
-            </span>
-          </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setBurnDialogOpen(false)} data-testid="button-cancel-burn">
               Cancel
