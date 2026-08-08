@@ -1,0 +1,12 @@
+# Railway config for Pidaka
+# https://docs.railway.com/config-as-code
+
+[build]
+builder = "railpack"
+buildCommand = "npm install --include=dev && npm run build"
+
+[deploy]
+startCommand = "npm start"
+preDeployCommand = ["npm run db:push"]
+healthcheckPath = "/"
+restartPolicyType = "on_failure"
