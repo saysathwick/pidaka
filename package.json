@@ -11,11 +11,10 @@
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
-    "test:doorstep": "tsx --test packages/doorstep/src/index.test.ts",
     "db:push": "drizzle-kit push --force"
   },
   "dependencies": {
-    "@pidaka/doorstep": "file:packages/doorstep",
+    "@pidaka/doorstep": "github:saysathwick/doorstep",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@radix-ui/react-accordion": "^1.2.4",
