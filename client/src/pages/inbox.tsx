@@ -2,37 +2,51 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft } from "lucide-react";
+import { AppHeader } from "@/components/app-header";
 import { BurningCookieIcon } from "@/components/burning-cookie-icon";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { PagedCopy } from "@/components/paged-copy";
 
 interface BurnItem {
   id: string;
   message: string;
   createdAt: string;
   readAt: string | null;
-  pidakaExcerpt: string;
+}
+
+interface PidakaThread {
+  id: string;
+  content: string;
+  createdAt: string;
+  live: boolean;
+  burns: BurnItem[];
+}
+
+interface InboxResponse {
+  threads: PidakaThread[];
 }
 
 export default function InboxPage() {
   const { user, refreshUser } = useAuth();
   const [, navigate] = useLocation();
 
-  const { data: burns, isLoading } = useQuery<BurnItem[]>({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery<InboxResponse>({
     queryKey: ["/api/burns/inbox"],
     refetchInterval: 15000,
   });
 
+  const threads = data?.threads ?? [];
+  const burns = threads.flatMap((thread) => thread.burns);
+
+  const unreadCount = burns.filter((b) => !b.readAt).length;
+
   useEffect(() => {
-    if (!burns || burns.length === 0) return;
-    const hasUnread = burns.some((b) => !b.readAt);
-    if (!hasUnread) return;
+    if (unreadCount === 0) return;
     const t = window.setTimeout(async () => {
       try {
         await apiRequest("POST", "/api/burns/inbox/read");
@@ -43,78 +57,100 @@ export default function InboxPage() {
       }
     }, 1400);
     return () => window.clearTimeout(t);
-  }, [burns, refreshUser]);
+  }, [unreadCount, refreshUser]);
 
   return (
     <div className="min-h-screen bg-background wall-atmosphere">
-      <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl">
-        <div className="max-w-2xl mx-auto flex items-center gap-3 px-4 py-3">
-          <Button size="icon" variant="ghost" onClick={() => navigate("/")} data-testid="button-back">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div className="flex items-center gap-2.5" data-testid="text-inbox-title">
-            <div className="relative">
-              <div className="absolute -inset-1 rounded-full bg-primary/20 blur-sm" />
-            <BurningCookieIcon className="h-6 w-6" isLit />
-            </div>
-            <span className="font-serif text-lg tracking-[0.14em] uppercase">Burns</span>
-          </div>
-          {user && (
-            <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="text-inbox-count">
-              <span className="font-semibold text-foreground text-sm">{user.burnsReceivedCount}</span>
-              <span>received</span>
-            </div>
-          )}
-        </div>
-      </header>
+      <AppHeader place="burns" fetching={isFetching && !isLoading} />
 
-      <main className="max-w-2xl mx-auto px-4 py-5 flex flex-col gap-3">
+      <main className="max-w-2xl mx-auto px-4 py-5 flex flex-col gap-6">
+        {user && !isLoading && (
+          <p className="text-xs text-muted-foreground" data-testid="text-inbox-count">
+            <span className="font-semibold text-foreground">{user.burnsReceivedCount}</span> received. They will not know it was you.
+          </p>
+        )}
         {isLoading ? (
           <div className="flex flex-col gap-3">
             {[1, 2, 3].map((i) => (
-              <Card key={i}>
-                <CardContent className="pt-4 pb-4 flex flex-col gap-3">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-3 w-1/4" />
-                </CardContent>
-              </Card>
+              <div key={i} className="composer-glass rounded-xl border px-5 pt-4 pb-4 flex flex-col gap-3">
+                <Skeleton className="h-4 w-full bg-foreground/10" />
+                <Skeleton className="h-4 w-2/3 bg-foreground/10" />
+                <Skeleton className="h-3 w-1/4 bg-foreground/10" />
+              </div>
             ))}
           </div>
-        ) : burns && burns.length > 0 ? (
+        ) : isError ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <p className="font-serif text-xl">Burns could not be reached</p>
+            <p className="text-sm text-muted-foreground">The room did not answer.</p>
+            <Button onClick={() => void refetch()} data-testid="button-retry-inbox">
+              Try again
+            </Button>
+          </div>
+        ) : threads.length > 0 ? (
           <AnimatePresence initial={false}>
-            {burns.map((burn, index) => (
-              <motion.div
-                key={burn.id}
+            {threads.map((thread, index) => (
+              <motion.section
+                key={thread.id}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, delay: Math.min(index * 0.04, 0.24) }}
+                className="flex flex-col gap-2"
+                data-testid={`thread-pidaka-${thread.id}`}
               >
-                <Card
-                  className={cn("overflow-hidden", !burn.readAt && "border-primary/40")}
-                  data-testid={`card-burn-${burn.id}`}
-                >
-                  <CardContent className="pt-4 pb-4 flex flex-col gap-3">
-                    {burn.pidakaExcerpt && (
-                      <p className="font-serif text-sm text-muted-foreground leading-relaxed">
-                        On: “{burn.pidakaExcerpt}”
-                      </p>
-                    )}
-                    <div className="flex items-start gap-3">
-                      <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary/10 shrink-0 mt-0.5">
-                        <BurningCookieIcon className="h-4 w-4 text-primary" />
+                <div className="composer-glass own-pidaka rounded-xl border" data-testid={`card-own-pidaka-${thread.id}`}>
+                  <div className="px-5 pt-5 pb-4 flex flex-col gap-3">
+                    <PagedCopy
+                      text={thread.content}
+                      className="text-[15px]"
+                      testId={`text-own-pidaka-${thread.id}`}
+                    />
+                    <div className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                      <span className="text-primary">yours</span>
+                      <span className="normal-case tracking-normal">
+                        {formatDistanceToNow(new Date(thread.createdAt), { addSuffix: true })}
+                        {thread.burns.length === 0
+                          ? " · no burns yet"
+                          : ` · ${thread.burns.length} ${thread.burns.length === 1 ? "burn" : "burns"}`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {thread.burns.length > 0 ? (
+                  <div className="flex flex-col gap-2 pl-3 sm:pl-5 border-l border-border/70 ml-2">
+                    {thread.burns.map((burn) => (
+                      <div
+                        key={burn.id}
+                        className={cn(
+                          "composer-glass rounded-xl border",
+                          !burn.readAt && "ring-1 ring-primary/35",
+                        )}
+                        data-testid={`card-burn-${burn.id}`}
+                      >
+                        <div className="px-5 pt-4 pb-4 flex flex-col gap-3">
+                          <div className="flex items-start gap-3">
+                            <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary/10 shrink-0 mt-0.5">
+                              <BurningCookieIcon className="h-4 w-4 text-primary" />
+                            </div>
+                            <PagedCopy
+                              text={burn.message}
+                              className="text-sm"
+                              testId={`text-burn-${burn.id}`}
+                            />
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-11" data-testid={`text-burn-time-${burn.id}`}>
+                            <span>{formatDistanceToNow(new Date(burn.createdAt), { addSuffix: true })}</span>
+                            <span className="text-muted-foreground/60">from a stranger</span>
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" data-testid={`text-burn-${burn.id}`}>
-                        {burn.message}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-11" data-testid={`text-burn-time-${burn.id}`}>
-                      <span>{formatDistanceToNow(new Date(burn.createdAt), { addSuffix: true })}</span>
-                      <span className="text-muted-foreground/60">from a stranger</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="pl-5 text-sm text-muted-foreground">Nobody has answered this one.</p>
+                )}
+              </motion.section>
             ))}
           </AnimatePresence>
         ) : (
@@ -124,8 +160,8 @@ export default function InboxPage() {
             <BurningCookieIcon variant="hero" isLit className="h-16 w-16" />
             </div>
             <div className="text-center flex flex-col gap-2">
-              <p className="font-serif text-xl">Nobody has answered you</p>
-              <p className="text-sm text-muted-foreground">Speak on the wall. Someone might burn it.</p>
+              <p className="font-serif text-xl">You have not spoken yet</p>
+              <p className="text-sm text-muted-foreground">Paste a pidaka. Burns will wait here.</p>
               <Button className="mt-2" onClick={() => navigate("/")} data-testid="button-inbox-to-wall">
                 Drop something on the wall
               </Button>

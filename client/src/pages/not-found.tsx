@@ -10,7 +10,7 @@ export default function NotFound() {
         <p className="text-[11px] uppercase tracking-[0.35em] text-muted-foreground">Lost</p>
         <h1 className="font-serif text-3xl">This room does not exist</h1>
         <p className="text-sm text-muted-foreground">
-          The wall is still burning. Go back before it dies.
+          The wall is still here.
         </p>
         <Button onClick={() => navigate("/")} data-testid="button-go-home">
           Back to the wall

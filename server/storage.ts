@@ -1,4 +1,4 @@
-import { eq, desc, lt, sql } from "drizzle-orm";
+import { eq, desc, lt, sql, and } from "drizzle-orm";
 import { db, isDemoMode } from "./db";
 import { DemoStorage } from "./demo-storage";
 import { excerptPidaka } from "@shared/names";
@@ -16,11 +16,14 @@ import {
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByPhone(phone: string): Promise<User | undefined>;
+  getUserByAuth(provider: string, subject: string): Promise<User | undefined>;
   getUserByAnonymousName(name: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   getUserStats(id: string): Promise<{ burnsSentCount: number; burnsReceivedCount: number }>;
 
   getActivePidakas(): Promise<Pidaka[]>;
+  getPidakasByCreator(userId: string): Promise<Pidaka[]>;
   createPidaka(content: string, creatorUserId: string): Promise<Pidaka>;
   getPidaka(id: string): Promise<Pidaka | undefined>;
   deleteExpiredPidakas(): Promise<void>;
@@ -42,6 +45,19 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async getUserByPhone(phone: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.phone, phone));
+    return user;
+  }
+
+  async getUserByAuth(provider: string, subject: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.authProvider, provider), eq(users.authSubject, subject)));
     return user;
   }
 
@@ -72,6 +88,15 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(pidakas)
       .where(sql`${pidakas.expiresAt} > ${now}`)
+      .orderBy(desc(pidakas.createdAt));
+  }
+
+  async getPidakasByCreator(userId: string): Promise<Pidaka[]> {
+    const now = new Date();
+    return db
+      .select()
+      .from(pidakas)
+      .where(and(eq(pidakas.creatorUserId, userId), sql`${pidakas.expiresAt} > ${now}`))
       .orderBy(desc(pidakas.createdAt));
   }
 

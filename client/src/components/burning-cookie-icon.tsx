@@ -43,7 +43,7 @@ export function CowDungCake({
           borderRadius: CAKE_RADIUS,
           background: "linear-gradient(145deg, #5a3a22 0%, #3d2414 42%, #29170c 72%, #170d07 100%)",
           boxShadow: lit
-            ? "0 0 28px 6px rgba(234, 88, 12, 0.4), inset 0 3px 10px rgba(251, 146, 60, 0.35)"
+            ? "0 0 28px 6px hsl(var(--primary) / 0.4), inset 0 3px 10px hsl(var(--primary) / 0.32)"
             : hero
               ? "inset 0 -8px 16px rgba(0, 0, 0, 0.55), inset 0 4px 10px rgba(115, 75, 48, 0.35)"
               : "inset 0 -3px 6px rgba(0, 0, 0, 0.45), inset 0 2px 4px rgba(115, 75, 48, 0.3)",
@@ -73,12 +73,12 @@ export function CowDungCake({
 
         {lit && hero && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="h-[42%] w-[42%] rounded-full bg-orange-600/55 blur-md animate-pulse motion-reduce:animate-none" />
+            <div className="h-[42%] w-[42%] rounded-full bg-primary/55 blur-md animate-pulse motion-reduce:animate-none" />
             <div className="absolute h-[22%] w-[22%] rounded-full bg-yellow-400/70 blur-sm animate-ping motion-reduce:animate-none" />
           </div>
         )}
         {lit && !hero && (
-          <div className="absolute inset-[20%] rounded-full bg-orange-600/50 blur-[2px]" />
+          <div className="absolute inset-[20%] rounded-full bg-primary/50 blur-[2px]" />
         )}
       </div>
     </div>

@@ -11,32 +11,61 @@ function hoursFromNow(hours: number) {
   return new Date(Date.now() + hours * 3600000);
 }
 
+const DEMO_PIDAKA_LINES = [
+  "I still check the last message I never sent.",
+  "Nobody in this house knows I applied to leave.",
+  "If tonight is the last time I say this: I meant it.",
+  "I rehearsed the goodbye in the bathroom mirror and then asked about dinner.",
+  "The photo is still in the drawer. I have not opened it. I know which one it is.",
+  "I said I was fine on the call. I hung up and sat on the floor.",
+  "There is a ticket in my bag I have not told anyone about.",
+  "I keep their mug. I wash it. I put it back.",
+  "I almost wrote their name here. I did not.",
+  "The last time we spoke I made it sound like weather.",
+  "I walk past their building on purpose and call it a shortcut.",
+  "I have a draft with no recipient. It has been there for months.",
+  "I smiled in the group photo. I was already gone.",
+  "They think I forgot. I did not. I chose not to answer.",
+  "I told my mother I was busy. I was sitting in the dark.",
+  "I still have the key. I do not have a door.",
+  "I practised saying it out loud and my voice did not sound like mine.",
+  "The apology is written. It is not sent. That is the whole story.",
+  "I keep counting the days since I last told the truth at a table.",
+  "I said see you soon and I did not mean soon.",
+  "I packed a bag once and unpacked it before morning.",
+  "Nobody asked. I would have answered if they had.",
+  "I wear the ring on a chain now. Under the shirt. Still there.",
+  "I laughed at the joke so they would not see the other thing.",
+  "I know which song I cannot play in this city.",
+  "I left the light on so the house would look awake.",
+  "I keep starting letters with I hope you are well and then I stop.",
+  "They asked what I wanted. I named a restaurant. I meant a life.",
+  "I still have the voicemail. I have not played it this month. I will play it tonight and then I will not sleep and then I will play it again at four when the house is honest. I keep meaning to delete it. My thumb hovers. The screen goes dark. In the morning I tell myself it is only a file. It is not only a file. It is the last time their voice was not careful with me. I walk to work with it in my pocket like a stone. I do not tell anyone I am carrying a stone. If you are still reading, you already know how this goes. I will not press play until I am alone. I am never as alone as I pretend. I have a route now that avoids the street with the bakery. I tell people it is quieter. It is not quieter. It is the street where we stood in the rain and I said nothing useful. I can still smell the yeast. I can still see their hands. I write this in pieces because the whole thing will not fit in a mouth. Page after page I am still in that rain. I am still choosing the long way home.",
+  "I packed the bag in the afternoon so I would not have to think in the dark. Socks. The cheap passport. A letter I will not leave on the table because leaving it would make it real. I stood in the doorway and counted the rooms as if they could argue. The kettle clicked in the kitchen. Someone laughed on a show I used to watch with them. I put the bag back under the bed and I made tea and I sat on the floor with the mug between my hands until it went cold. Tomorrow I will pack it again. I will tell myself tomorrow is different. Tomorrow is the same doorway. I am writing this so the wall can hold it, because my mouth will not. There is a ticket in the inner pocket that expires and I keep renewing it like a superstition. I have told no one. If I say it out loud the house will change shape. I am not ready for a different house. I am ready only to admit I packed the bag.",
+  "I keep a list I do not call a list. The first time I almost said it. The second time I laughed instead. The third time I sent a photograph of the sky so I would not have to send the sentence. I have become an expert at weather. I can talk about rain until the rain is over. I can talk about work until the room empties. I can walk out of a dinner with my coat on and my truth still folded in the pocket like a napkin I stole. Nobody stops me. That is the part I cannot forgive. I wanted someone to put a hand on the door. I wanted the question. I had the answer ready and then I swallowed it with water. If this takes more than one look, good. It took more than one year. I am still in the coat. I am still at the door. I am still hoping the wall is a kind of hand. I still have the voicemail. I have not played it this month. I will play it tonight and then I will not sleep and then I will play it again at four when the house is honest. I keep meaning to delete it. My thumb hovers. The screen goes dark. In the morning I tell myself it is only a file. It is not only a file. It is the last time their voice was not careful with me. I walk to work with it in my pocket like a stone. I packed the bag in the afternoon so I would not have to think in the dark. Socks. The cheap passport. A letter I will not leave on the table because leaving it would make it real. I stood in the doorway and counted the rooms as if they could argue. Tomorrow I will pack it again. I will tell myself tomorrow is different. Tomorrow is the same doorway.",
+];
+
+function seedDemoPidakas(): Pidaka[] {
+  return DEMO_PIDAKA_LINES.map((content, index) => {
+    const age = index === 2 ? 46.4 : 0.8 + ((index * 1.37) % 45);
+    const left = Math.max(1.4, 48 - age);
+    const creator = `stranger-${String.fromCharCode(97 + (index % 12))}`;
+    return {
+      id: `demo-${index + 1}`,
+      content,
+      creatorUserId: creator,
+      createdAt: hoursAgo(age),
+      expiresAt: hoursFromNow(left),
+    };
+  });
+}
+
 export class DemoStorage implements IStorage {
   private users = new Map<string, User>();
   private usersByEmail = new Map<string, User>();
-  private pidakas: Pidaka[] = [
-    {
-      id: "demo-1",
-      content: "I still check the last message I never sent.",
-      creatorUserId: "stranger-a",
-      createdAt: hoursAgo(5),
-      expiresAt: hoursFromNow(43),
-    },
-    {
-      id: "demo-2",
-      content: "Nobody in this house knows I applied to leave.",
-      creatorUserId: "stranger-b",
-      createdAt: hoursAgo(14),
-      expiresAt: hoursFromNow(34),
-    },
-    {
-      id: "demo-3",
-      content: "If tonight is the last time I say this: I meant it.",
-      creatorUserId: "stranger-c",
-      createdAt: hoursAgo(46.4),
-      expiresAt: hoursFromNow(1.6),
-    },
-  ];
+  private usersByPhone = new Map<string, User>();
+  private usersByAuth = new Map<string, User>();
+  private pidakas: Pidaka[] = seedDemoPidakas();
   private burns: Burn[] = [];
   private views = new Map<string, Set<string>>();
 
@@ -48,6 +77,14 @@ export class DemoStorage implements IStorage {
     return this.usersByEmail.get(email.toLowerCase());
   }
 
+  async getUserByPhone(phone: string) {
+    return this.usersByPhone.get(phone);
+  }
+
+  async getUserByAuth(provider: string, subject: string) {
+    return this.usersByAuth.get(`${provider}:${subject}`);
+  }
+
   async getUserByAnonymousName(name: string) {
     return Array.from(this.users.values()).find((user) => user.anonymousName === name);
   }
@@ -56,7 +93,10 @@ export class DemoStorage implements IStorage {
     const user: User = {
       id: randomUUID(),
       email: insertUser.email,
-      password: insertUser.password,
+      password: insertUser.password ?? "",
+      phone: insertUser.phone ?? null,
+      authProvider: insertUser.authProvider ?? "password",
+      authSubject: insertUser.authSubject ?? "",
       anonymousName: insertUser.anonymousName,
       burnsSentCount: 0,
       burnsReceivedCount: 0,
@@ -64,6 +104,8 @@ export class DemoStorage implements IStorage {
     };
     this.users.set(user.id, user);
     this.usersByEmail.set(user.email.toLowerCase(), user);
+    if (user.phone) this.usersByPhone.set(user.phone, user);
+    if (user.authSubject) this.usersByAuth.set(`${user.authProvider}:${user.authSubject}`, user);
 
     const welcome: Burn = {
       id: randomUUID(),
@@ -93,6 +135,13 @@ export class DemoStorage implements IStorage {
     const now = Date.now();
     return this.pidakas
       .filter((p) => p.expiresAt.getTime() > now)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getPidakasByCreator(userId: string) {
+    const now = Date.now();
+    return this.pidakas
+      .filter((p) => p.creatorUserId === userId && p.expiresAt.getTime() > now)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 

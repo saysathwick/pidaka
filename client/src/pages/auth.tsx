@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useAuthModal } from "@/lib/auth-modal";
 import { queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,112 +13,326 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
 import { CowDungCake } from "@/components/burning-cookie-icon";
+import { ArrowLeft, Mail } from "lucide-react";
+
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
+      <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6.5c-.3 1.5-1.2 2.8-2.6 3.6v3h4.2c2.4-2.2 3.8-5.5 3.8-9.7z" />
+      <path fill="#34A853" d="M12 24c3.5 0 6.4-1.2 8.5-3.1l-4.2-3.2c-1.2.8-2.7 1.3-4.3 1.3-3.3 0-6.1-2.2-7.1-5.2H.6v3.3C2.7 21.5 7 24 12 24z" />
+      <path fill="#FBBC05" d="M4.9 13.8c-.3-.8-.4-1.6-.4-2.5s.1-1.7.4-2.5V5.5H.6C.2 7.2 0 9.1 0 11.3s.2 4.1.6 5.8l4.3-3.3z" />
+      <path fill="#EA4335" d="M12 4.8c1.9 0 3.6.7 5 1.9l3.7-3.7C18.4 1.1 15.5 0 12 0 7 0 2.7 2.5.6 6.2l4.3 3.3C5.9 6.9 8.7 4.8 12 4.8z" />
+    </svg>
+  );
+}
+
+function AppleMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden>
+      <path d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.9-3.5.9s-1.8-1-3-.9c-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.3 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7 2-.1 2.9-2.3c.7-1.2 1-2.3 1-2.4-.1 0-1.9-.7-1.9-3.9zM14.7 5.8c.6-.8 1.1-1.8.9-2.8-1 .1-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.8 1.1.1 2.2-.6 2.9-1.5z" />
+    </svg>
+  );
+}
 
 export function AuthForm() {
-  const [isLogin, setIsLogin] = useState(true);
+  const [step, setStep] = useState<"choose" | "phone" | "code" | "email">("choose");
+  const [emailMode, setEmailMode] = useState<"register" | "login">("register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const { login, register } = useAuth();
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState<"google" | "apple" | "phone" | "email" | null>(null);
+  const { completeSession, authError, clearAuthError } = useAuth();
   const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!authError) return;
+    toast({ title: "Sign-in did not take", description: authError, variant: "destructive" });
+    clearAuthError();
+  }, [authError, clearAuthError, toast]);
+
+  const afterSession = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/pidakas"] });
+  };
+
+  const submitEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setLoading("email");
     try {
-      if (isLogin) {
-        await login(email, password);
-      } else {
-        await register(email, password);
-      }
-      queryClient.invalidateQueries({ queryKey: ["/api/pidakas"] });
+      const path = emailMode === "register" ? "/api/auth/register" : "/api/auth/login";
+      const res = await apiRequest("POST", path, { email, password });
+      const data = await res.json();
+      completeSession({
+        ...data,
+        created: emailMode === "register" ? true : data.created,
+      });
+      afterSession();
     } catch (err: any) {
       toast({
-        title: "Error",
-        description: err.message || "Something went wrong",
+        title: emailMode === "register" ? "Could not create that account" : "Could not sign in",
+        description: err.message,
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setLoading(null);
+    }
+  };
+
+  const startPhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading("phone");
+    try {
+      const res = await apiRequest("POST", "/api/auth/phone/start", { phone });
+      const data = await res.json() as { demoCode?: string };
+      setStep("code");
+      setCode("");
+      toast({
+        title: "Code sent",
+        description: data.demoCode
+          ? `On this local wall the code is ${data.demoCode}`
+          : "Check your messages.",
+      });
+    } catch (err: any) {
+      toast({ title: "Could not send a code", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const verifyPhone = async (value: string) => {
+    if (value.length !== 6) return;
+    setLoading("phone");
+    try {
+      const res = await apiRequest("POST", "/api/auth/phone/verify", { phone, code: value });
+      const data = await res.json();
+      completeSession(data);
+      afterSession();
+    } catch (err: any) {
+      toast({ title: "That code did not work", description: err.message, variant: "destructive" });
+      setCode("");
+    } finally {
+      setLoading(null);
     }
   };
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col items-center gap-3">
-        <div className="relative mb-1">
-          <CowDungCake variant="hero" isLit={false} className="h-24 w-24" />
-        </div>
-        <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-[260px]">
+        <CowDungCake variant="hero" isLit={false} className="h-24 w-24" />
+        <p className="text-sm text-foreground/70 text-center leading-relaxed max-w-[260px]">
           We will name you. You will not pick it.
         </p>
       </div>
 
-      <div className="flex items-center rounded-md bg-muted/50 p-1 gap-1">
-        <button
-          type="button"
-          onClick={() => setIsLogin(true)}
-          className={`flex-1 text-sm font-medium py-2 rounded-md transition-all duration-200 ${
-            isLogin
-              ? "bg-background shadow-sm text-foreground"
-              : "text-muted-foreground"
-          }`}
-          data-testid="button-login-tab"
-        >
-          Login
-        </button>
-        <button
-          type="button"
-          onClick={() => setIsLogin(false)}
-          className={`flex-1 text-sm font-medium py-2 rounded-md transition-all duration-200 ${
-            !isLogin
-              ? "bg-background shadow-sm text-foreground"
-              : "text-muted-foreground"
-          }`}
-          data-testid="button-register-tab"
-        >
-          Register
-        </button>
-      </div>
+      {step === "choose" && (
+        <div className="flex flex-col gap-2.5">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 justify-start gap-3 bg-background text-foreground border-input"
+            disabled={loading !== null}
+            onClick={() => {
+              setLoading("google");
+              window.location.href = "/api/auth/google";
+            }}
+            data-testid="button-auth-google"
+          >
+            <GoogleMark />
+            Continue with Google
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 justify-start gap-3 bg-background text-foreground border-input"
+            disabled={loading !== null}
+            onClick={() => {
+              setLoading("apple");
+              window.location.href = "/api/auth/apple";
+            }}
+            data-testid="button-auth-apple"
+          >
+            <AppleMark />
+            Continue with Apple
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 justify-start gap-3 bg-background text-foreground border-input"
+            disabled={loading !== null}
+            onClick={() => setStep("phone")}
+            data-testid="button-auth-phone"
+          >
+            <span className="inline-flex h-4 w-4 items-center justify-center text-[13px] font-semibold">+</span>
+            Continue with phone
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 justify-start gap-3 bg-background text-foreground border-input"
+            disabled={loading !== null}
+            onClick={() => {
+              setEmailMode("register");
+              setStep("email");
+            }}
+            data-testid="button-auth-email"
+          >
+            <Mail className="h-4 w-4" />
+            Continue with email
+          </Button>
+        </div>
+      )}
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="email" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Email
-          </Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="bg-muted/50 border-0 focus-visible:ring-1 focus-visible:ring-primary/30"
-            data-testid="input-email"
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="password" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Password
-          </Label>
-          <Input
-            id="password"
-            type="password"
-            placeholder={isLogin ? "Enter password" : "Min 6 characters"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={isLogin ? 1 : 6}
-            className="bg-muted/50 border-0 focus-visible:ring-1 focus-visible:ring-primary/30"
-            data-testid="input-password"
-          />
-        </div>
-        <Button type="submit" disabled={loading} className="mt-1" data-testid="button-submit-auth">
-          {loading ? "Hold still..." : isLogin ? "Drop your mask" : "Take a name"}
-        </Button>
-      </form>
+      {step === "email" && (
+        <form onSubmit={submitEmail} className="flex flex-col gap-4">
+          <button
+            type="button"
+            className="self-start inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
+            onClick={() => setStep("choose")}
+          >
+            <ArrowLeft className="h-3 w-3" />
+            Other ways
+          </button>
+          <div className="flex rounded-lg border border-input p-0.5 bg-background">
+            <button
+              type="button"
+              className={`flex-1 h-8 rounded-md text-xs uppercase tracking-[0.14em] ${
+                emailMode === "register" ? "bg-secondary text-foreground" : "text-muted-foreground"
+              }`}
+              onClick={() => setEmailMode("register")}
+              data-testid="button-email-register-mode"
+            >
+              Register
+            </button>
+            <button
+              type="button"
+              className={`flex-1 h-8 rounded-md text-xs uppercase tracking-[0.14em] ${
+                emailMode === "login" ? "bg-secondary text-foreground" : "text-muted-foreground"
+              }`}
+              onClick={() => setEmailMode("login")}
+              data-testid="button-email-login-mode"
+            >
+              Sign in
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="email" className="text-xs font-medium uppercase tracking-wider text-foreground/80">
+              Email
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="h-10 bg-background border-input text-foreground"
+              data-testid="input-email"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="password" className="text-xs font-medium uppercase tracking-wider text-foreground/80">
+              Password
+            </Label>
+            <Input
+              id="password"
+              type="password"
+              autoComplete={emailMode === "register" ? "new-password" : "current-password"}
+              minLength={emailMode === "register" ? 6 : 1}
+              placeholder={emailMode === "register" ? "At least 6 characters" : "Your password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="h-10 bg-background border-input text-foreground"
+              data-testid="input-password"
+            />
+          </div>
+          <Button type="submit" disabled={loading === "email"} data-testid="button-email-submit">
+            {loading === "email"
+              ? emailMode === "register" ? "Creating..." : "Signing in..."
+              : emailMode === "register" ? "Create account" : "Sign in"}
+          </Button>
+        </form>
+      )}
+
+      {step === "phone" && (
+        <form onSubmit={startPhone} className="flex flex-col gap-4">
+          <button
+            type="button"
+            className="self-start inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
+            onClick={() => setStep("choose")}
+          >
+            <ArrowLeft className="h-3 w-3" />
+            Other ways
+          </button>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="phone" className="text-xs font-medium uppercase tracking-wider text-foreground/80">
+              Phone
+            </Label>
+            <Input
+              id="phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="+91 98765 43210"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              required
+              className="h-10 bg-background border-input text-foreground"
+              data-testid="input-phone"
+            />
+          </div>
+          <Button type="submit" disabled={loading === "phone"} data-testid="button-send-code">
+            {loading === "phone" ? "Sending..." : "Send a code"}
+          </Button>
+        </form>
+      )}
+
+      {step === "code" && (
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void verifyPhone(code);
+          }}
+        >
+          <button
+            type="button"
+            className="self-start inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              setStep("phone");
+              setCode("");
+            }}
+          >
+            <ArrowLeft className="h-3 w-3" />
+            Change number
+          </button>
+          <div className="flex flex-col gap-2">
+            <Label className="text-xs font-medium uppercase tracking-wider text-foreground/80">
+              Code
+            </Label>
+            <InputOTP
+              maxLength={6}
+              value={code}
+              onChange={(value) => {
+                setCode(value);
+                if (value.length === 6) void verifyPhone(value);
+              }}
+              disabled={loading === "phone"}
+            >
+              <InputOTPGroup className="w-full justify-between">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <InputOTPSlot key={i} index={i} className="h-11 w-11 bg-background" />
+                ))}
+              </InputOTPGroup>
+            </InputOTP>
+          </div>
+          <p className="text-xs text-muted-foreground text-center">Sent to {phone}</p>
+        </form>
+      )}
     </div>
   );
 }
@@ -132,13 +347,13 @@ export function AuthDialog() {
 
   return (
     <Dialog open={authOpen} onOpenChange={(open) => !open && hideAuth()}>
-      <DialogContent className="max-w-sm bg-background border-border/60">
+      <DialogContent className="max-w-sm bg-card text-card-foreground border-border shadow-2xl sm:rounded-xl">
         <DialogHeader className="text-center sm:text-center">
           <DialogTitle className="font-serif text-2xl tracking-[0.18em] uppercase">
             Pidaka
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Login or register to post and send burns
+            Continue with Google, Apple, phone, or email
           </DialogDescription>
         </DialogHeader>
         <AuthForm />
@@ -150,7 +365,7 @@ export function AuthDialog() {
 export default function AuthPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4 wall-atmosphere">
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-2xl">
         <AuthForm />
       </div>
     </div>

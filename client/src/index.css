@@ -21,15 +21,15 @@
   --sidebar: 240 5% 96%;
   --sidebar-foreground: 240 10% 10%;
   --sidebar-border: 240 6% 90%;
-  --sidebar-primary: 24 95% 53%;
+  --sidebar-primary: 17 53% 47%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 240 5% 93%;
   --sidebar-accent-foreground: 240 10% 10%;
-  --sidebar-ring: 24 95% 53%;
+  --sidebar-ring: 17 53% 47%;
   --popover: 0 0% 100%;
   --popover-foreground: 240 10% 10%;
   --popover-border: 240 6% 90%;
-  --primary: 24 95% 53%;
+  --primary: 17 53% 47%;
   --primary-foreground: 0 0% 100%;
   --secondary: 240 5% 93%;
   --secondary-foreground: 240 10% 25%;
@@ -40,8 +40,8 @@
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
   --input: 240 6% 83%;
-  --ring: 24 95% 53%;
-  --chart-1: 24 95% 53%;
+  --ring: 17 53% 47%;
+  --chart-1: 17 53% 47%;
   --chart-2: 173 58% 39%;
   --chart-3: 197 37% 24%;
   --chart-4: 43 74% 66%;
@@ -102,15 +102,15 @@
   --sidebar: 240 8% 5%;
   --sidebar-foreground: 30 12% 94%;
   --sidebar-border: 240 6% 12%;
-  --sidebar-primary: 24 95% 53%;
+  --sidebar-primary: 17 50% 56%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 240 5% 14%;
   --sidebar-accent-foreground: 0 0% 93%;
-  --sidebar-ring: 24 95% 53%;
+  --sidebar-ring: 17 50% 56%;
   --popover: 24 12% 7%;
   --popover-foreground: 30 12% 94%;
   --popover-border: 24 8% 13%;
-  --primary: 24 95% 53%;
+  --primary: 17 50% 56%;
   --primary-foreground: 0 0% 100%;
   --secondary: 240 5% 14%;
   --secondary-foreground: 0 0% 80%;
@@ -121,8 +121,8 @@
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
   --input: 240 5% 22%;
-  --ring: 24 95% 53%;
-  --chart-1: 24 95% 53%;
+  --ring: 17 50% 56%;
+  --chart-1: 17 50% 56%;
   --chart-2: 173 58% 39%;
   --chart-3: 197 37% 50%;
   --chart-4: 43 74% 66%;
@@ -136,6 +136,86 @@
   --shadow-lg: 0px 8px 15px 0px hsl(0 0% 0% / 0.30), 0px 4px 6px -1px hsl(0 0% 0% / 0.20);
   --shadow-xl: 0px 16px 25px 0px hsl(0 0% 0% / 0.35), 0px 8px 10px -1px hsl(0 0% 0% / 0.20);
   --shadow-2xl: 0px 24px 50px 0px hsl(0 0% 0% / 0.40);
+}
+
+html[data-accent="a"] {
+  --primary: 24 95% 53%;
+  --ring: 24 95% 53%;
+  --sidebar-primary: 24 95% 53%;
+  --sidebar-ring: 24 95% 53%;
+  --chart-1: 24 95% 53%;
+}
+
+html.dark[data-accent="a"] {
+  --primary: 24 95% 58%;
+  --ring: 24 95% 58%;
+  --sidebar-primary: 24 95% 58%;
+  --sidebar-ring: 24 95% 58%;
+  --chart-1: 24 95% 58%;
+}
+
+html[data-accent="b"] {
+  --primary: 17 53% 47%;
+  --ring: 17 53% 47%;
+  --sidebar-primary: 17 53% 47%;
+  --sidebar-ring: 17 53% 47%;
+  --chart-1: 17 53% 47%;
+}
+
+html.dark[data-accent="b"] {
+  --primary: 17 50% 56%;
+  --ring: 17 50% 56%;
+  --sidebar-primary: 17 50% 56%;
+  --sidebar-ring: 17 50% 56%;
+  --chart-1: 17 50% 56%;
+}
+
+html[data-accent="c"] {
+  --primary: 43 52% 38%;
+  --ring: 43 52% 38%;
+  --sidebar-primary: 43 52% 38%;
+  --sidebar-ring: 43 52% 38%;
+  --chart-1: 43 52% 38%;
+}
+
+html.dark[data-accent="c"] {
+  --primary: 43 48% 58%;
+  --ring: 43 48% 58%;
+  --sidebar-primary: 43 48% 58%;
+  --sidebar-ring: 43 48% 58%;
+  --chart-1: 43 48% 58%;
+}
+
+html[data-accent="d"] {
+  --primary: 228 36% 38%;
+  --ring: 228 36% 38%;
+  --sidebar-primary: 228 36% 38%;
+  --sidebar-ring: 228 36% 38%;
+  --chart-1: 228 36% 38%;
+}
+
+html.dark[data-accent="d"] {
+  --primary: 228 38% 68%;
+  --ring: 228 38% 68%;
+  --sidebar-primary: 228 38% 68%;
+  --sidebar-ring: 228 38% 68%;
+  --chart-1: 228 38% 68%;
+}
+
+html[data-accent="e"] {
+  --primary: 349 42% 40%;
+  --ring: 349 42% 40%;
+  --sidebar-primary: 349 42% 40%;
+  --sidebar-ring: 349 42% 40%;
+  --chart-1: 349 42% 40%;
+}
+
+html.dark[data-accent="e"] {
+  --primary: 349 38% 62%;
+  --ring: 349 38% 62%;
+  --sidebar-primary: 349 38% 62%;
+  --sidebar-ring: 349 38% 62%;
+  --chart-1: 349 38% 62%;
 }
 
 @layer base {
@@ -253,7 +333,37 @@
 
   .wall-atmosphere {
     background-color: hsl(var(--background));
-    background-image: radial-gradient(ellipse 80% 50% at 50% -18%, hsl(24 95% 53% / 0.16), transparent 55%);
+    background-image: radial-gradient(ellipse 80% 50% at 50% -18%, hsl(var(--primary) / 0.16), transparent 55%);
+  }
+
+  .composer-glass {
+    position: relative;
+    isolation: isolate;
+    background-color: rgb(255 255 255 / 0.18);
+    border-color: rgb(255 255 255 / 0.55);
+    backdrop-filter: blur(28px) saturate(1.7);
+    -webkit-backdrop-filter: blur(28px) saturate(1.7);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.7),
+      0 12px 40px rgb(30 20 10 / 0.08);
+  }
+
+  .dark .composer-glass {
+    background-color: rgb(255 255 255 / 0.08);
+    border-color: rgb(255 255 255 / 0.16);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      0 18px 50px rgb(0 0 0 / 0.45);
+  }
+
+  .composer-glass.own-pidaka {
+    background-color: hsl(var(--primary) / 0.16);
+    border-color: hsl(var(--primary) / 0.38);
+  }
+
+  .dark .composer-glass.own-pidaka {
+    background-color: hsl(var(--primary) / 0.14);
+    border-color: hsl(var(--primary) / 0.28);
   }
 
   .ember-breathe {
@@ -266,7 +376,7 @@
     width: 3px;
     height: 3px;
     border-radius: 999px;
-    background: hsl(24 95% 62%);
+    background: hsl(var(--primary) / 0.85);
     animation-name: ember-rise;
     animation-timing-function: ease-out;
     animation-iteration-count: infinite;

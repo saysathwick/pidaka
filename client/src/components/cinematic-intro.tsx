@@ -117,7 +117,7 @@ export function CinematicIntro({ onComplete }: CinematicIntroProps) {
                 className="relative h-full w-full"
               >
                 {showFire && (
-                  <div className="absolute -inset-10 rounded-full bg-orange-600/20 blur-3xl ember-breathe" />
+                  <div className="absolute -inset-10 rounded-full bg-primary/20 blur-3xl ember-breathe" />
                 )}
                 <PidakaMark
                   variant="hero"
@@ -151,14 +151,11 @@ export function CinematicIntro({ onComplete }: CinematicIntroProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                className="flex flex-col items-center gap-3"
+                className="flex flex-col items-center"
               >
                 <h1 className="font-serif text-5xl md:text-7xl tracking-[0.22em] font-medium">
                   PIDAKA
                 </h1>
-                <p className="text-[11px] uppercase tracking-[0.42em] text-muted-foreground">
-                  It dies in 48 hours
-                </p>
               </motion.div>
             )}
           </AnimatePresence>

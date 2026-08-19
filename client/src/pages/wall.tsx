@@ -3,30 +3,28 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useAuthModal } from "@/lib/auth-modal";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Sun, Moon, LogOut, MessageCircle } from "lucide-react";
+import { AppHeader } from "@/components/app-header";
 import { BurningCookieIcon } from "@/components/burning-cookie-icon";
 import { PidakaCard, type PidakaItem } from "@/components/pidaka-card";
-import { PidakaComposer } from "@/components/pidaka-composer";
+import { ComposeFab, ComposeOverlay, PidakaComposer } from "@/components/pidaka-composer";
 import { BurnRitual } from "@/components/burn-ritual";
-import { useTheme } from "@/lib/theme";
-import { useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 
 export default function WallPage() {
-  const { user, logout, refreshUser } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { showAuth } = useAuthModal();
-  const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
-  const [, navigate] = useLocation();
 
   const [newContent, setNewContent] = useState("");
   const [burnTarget, setBurnTarget] = useState<PidakaItem | null>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composerInView, setComposerInView] = useState(true);
+  const composerRef = useRef<HTMLDivElement>(null);
 
-  const { data: pidakas, isLoading, isError } = useQuery<PidakaItem[]>({
+  const { data: pidakas, isLoading, isError, isFetching, refetch } = useQuery<PidakaItem[]>({
     queryKey: ["/api/pidakas"],
     refetchInterval: 12000,
     retry: 1,
@@ -78,8 +76,9 @@ export default function WallPage() {
     },
     onSuccess: () => {
       setNewContent("");
+      setComposeOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/pidakas"] });
-      toast({ title: "On the wall", description: "Forty-eight hours. Then it is gone." });
+      toast({ title: "On the wall" });
     },
     onError: (err: Error) => {
       toast({ title: "The wall refused it", description: err.message, variant: "destructive" });
@@ -101,6 +100,17 @@ export default function WallPage() {
     },
   });
 
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setComposerInView(Boolean(entry?.isIntersecting)),
+      { threshold: 0.35, rootMargin: "-72px 0px 0px 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const handlePost = () => {
     if (!user) {
       showAuth();
@@ -108,6 +118,14 @@ export default function WallPage() {
     }
     if (!newContent.trim()) return;
     createPidaka.mutate(newContent.trim());
+  };
+
+  const openCompose = () => {
+    if (!user) {
+      showAuth();
+      return;
+    }
+    setComposeOpen(true);
   };
 
   const handleBurnClick = (pidakaId: string) => {
@@ -130,75 +148,35 @@ export default function WallPage() {
     />
   );
 
-  const unread = user?.unreadCount ?? 0;
-
   return (
     <div className="min-h-screen bg-background wall-atmosphere">
-      <header className="sticky top-0 z-50 border-b border-border/60 bg-background/70 backdrop-blur-xl">
-        <div className="max-w-2xl mx-auto flex items-center justify-between gap-2 px-4 py-3">
-          <div className="flex items-center gap-2.5" data-testid="text-brand">
-            <BurningCookieIcon className="h-7 w-7" />
-            <span className="font-serif text-xl tracking-[0.18em] uppercase">Pidaka</span>
-          </div>
-          <div className="flex items-center gap-0.5 flex-wrap">
-            {user ? (
-              <>
-                <span className="hidden sm:inline mr-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground" data-testid="text-username">
-                  {user.anonymousName}
-                </span>
-                <Button size="icon" variant="ghost" onClick={() => navigate("/inbox")} data-testid="button-inbox" className="relative">
-                  <MessageCircle className="h-4 w-4" />
-                  {unread > 0 && (
-                    <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary" data-testid="badge-unread" />
-                  )}
-                </Button>
-                <Button size="icon" variant="ghost" onClick={toggleTheme} data-testid="button-theme-toggle">
-                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                </Button>
-                <Button size="icon" variant="ghost" onClick={logout} data-testid="button-logout">
-                  <LogOut className="h-4 w-4" />
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button size="icon" variant="ghost" onClick={toggleTheme} data-testid="button-theme-toggle">
-                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                </Button>
-                <Button size="sm" onClick={showAuth} data-testid="button-drop-mask">
-                  Drop your mask
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+      <AppHeader place="wall" fetching={isFetching && !isLoading} />
 
-      <main className="max-w-2xl mx-auto px-4 pt-6 pb-36 md:pb-10 flex flex-col gap-5">
-        <div className="fixed bottom-0 inset-x-0 z-40 border-t border-border/60 bg-background/90 backdrop-blur-xl px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:static md:inset-auto md:z-auto md:border-0 md:bg-transparent md:backdrop-blur-none md:p-0 md:pb-0">
-          <div className="max-w-2xl mx-auto">
-            {composer}
-          </div>
+      <main className="max-w-6xl mx-auto px-4 pt-6 pb-28 sm:pb-12 flex flex-col gap-5">
+        <div ref={composerRef} className="max-w-2xl mx-auto md:mx-0 md:max-w-none">
+          {composer}
         </div>
 
         {isLoading && !pidakas ? (
-          <div className="flex flex-col gap-3">
-            {[1, 2, 3].map((i) => (
-              <Card key={i}>
-                <CardContent className="pt-4 pb-4 flex flex-col gap-3">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-2 w-full" />
-                </CardContent>
-              </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="composer-glass h-56 rounded-xl border px-5 pt-4 pb-4 flex flex-col gap-3">
+                <Skeleton className="h-4 w-full bg-foreground/10" />
+                <Skeleton className="h-4 w-3/4 bg-foreground/10" />
+                <Skeleton className="h-2 w-full bg-foreground/10" />
+              </div>
             ))}
           </div>
         ) : isError && !pidakas ? (
           <div className="flex flex-col items-center gap-3 py-16 text-center">
             <p className="font-serif text-xl">The wall is dark tonight</p>
-            <p className="text-sm text-muted-foreground">Could not reach the room. Stay. Try again.</p>
+            <p className="text-sm text-muted-foreground">Could not reach the room.</p>
+            <Button onClick={() => void refetch()} data-testid="button-retry-wall">
+              Try again
+            </Button>
           </div>
         ) : displayPidakas && displayPidakas.length > 0 ? (
-          <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             <AnimatePresence initial={false}>
               {displayPidakas.map((pidaka, index) => {
                 const arrived = arrivingIds.has(pidaka.id);
@@ -206,9 +184,10 @@ export default function WallPage() {
                   <motion.div
                     key={pidaka.id}
                     layout
+                    className="min-w-0"
                     initial={arrived ? { opacity: 0, y: -22 } : { opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, height: 0 }}
+                    exit={{ opacity: 0 }}
                     transition={{
                       duration: 0.45,
                       delay: arrived ? 0 : Math.min(index * 0.04, 0.28),
@@ -244,6 +223,19 @@ export default function WallPage() {
           </div>
         )}
       </main>
+
+      <ComposeFab
+        visible={!composerInView && !composeOpen && !burnTarget}
+        onClick={openCompose}
+      />
+      <ComposeOverlay
+        open={composeOpen}
+        value={newContent}
+        pending={createPidaka.isPending}
+        onChange={setNewContent}
+        onSubmit={handlePost}
+        onClose={() => setComposeOpen(false)}
+      />
 
       <BurnRitual
         pidaka={burnTarget}

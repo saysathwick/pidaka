@@ -6,7 +6,10 @@ import { z } from "zod";
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
-  password: text("password").notNull(),
+  password: text("password").notNull().default(""),
+  phone: text("phone").unique(),
+  authProvider: text("auth_provider").notNull().default("password"),
+  authSubject: text("auth_subject").notNull().default(""),
   anonymousName: text("anonymous_name").notNull().unique(),
   burnsSentCount: integer("burns_sent_count").notNull().default(0),
   burnsReceivedCount: integer("burns_received_count").notNull().default(0),
@@ -54,12 +57,21 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+export const phoneStartSchema = z.object({
+  phone: z.string().min(8, "Enter a phone number"),
+});
+
+export const phoneVerifySchema = z.object({
+  phone: z.string().min(8, "Enter a phone number"),
+  code: z.string().regex(/^\d{6}$/, "Enter the six-digit code"),
+});
+
 export const insertPidakaSchema = z.object({
-  content: z.string().min(1, "Content is required").max(500, "Maximum 500 characters"),
+  content: z.string().min(1, "Content is required").max(3000, "Maximum 3000 characters"),
 });
 
 export const insertBurnSchema = z.object({
-  message: z.string().min(1, "Message is required").max(500, "Maximum 500 characters"),
+  message: z.string().min(1, "Message is required").max(3000, "Maximum 3000 characters"),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({

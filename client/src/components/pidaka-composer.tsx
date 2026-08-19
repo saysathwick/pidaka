@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send } from "lucide-react";
+import { BurningCookieIcon } from "@/components/burning-cookie-icon";
+import { cn } from "@/lib/utils";
+import { TEXT_LIMIT, useLimitedText } from "@/hooks/use-limited-text";
 
 export const COMPOSER_PROMPTS = [
-  "Say it. It dies in 48 hours.",
+  "Say it to the wall.",
   "A secret you would not sign.",
   "What did you almost send?",
   "Tell the wall. Not them.",
@@ -19,6 +22,8 @@ interface PidakaComposerProps {
   onChange: (value: string) => void;
   onSubmit: () => void;
   onGuestClick: () => void;
+  autoFocus?: boolean;
+  testId?: string;
 }
 
 export function PidakaComposer({
@@ -28,8 +33,16 @@ export function PidakaComposer({
   onChange,
   onSubmit,
   onGuestClick,
+  autoFocus,
+  testId = "input-pidaka-content",
 }: PidakaComposerProps) {
   const [promptIndex, setPromptIndex] = useState(0);
+  const [modKey, setModKey] = useState("Ctrl");
+  const { handleChange, trimmed, used, remaining } = useLimitedText(value, onChange);
+
+  useEffect(() => {
+    setModKey(/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl");
+  }, []);
 
   useEffect(() => {
     if (value.trim()) return;
@@ -44,48 +57,189 @@ export function PidakaComposer({
       <button
         type="button"
         onClick={onGuestClick}
-        className="group w-full text-left rounded-xl border border-border/70 bg-card/90 px-5 py-5 hover-elevate"
+        className="composer-glass group w-full text-left rounded-xl border px-5 py-5 hover-elevate"
         data-testid="button-guest-composer"
       >
         <p className="font-serif text-xl sm:text-2xl tracking-tight">
           {COMPOSER_PROMPTS[promptIndex]}
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
-          Drop your mask to post. Reading is free.
+          Reading is free. We will name you. The wall will never show it.
         </p>
+        <span className="mt-3 inline-flex min-h-8 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground">
+          Drop your mask
+        </span>
       </button>
     );
   }
 
-  const used = value.length / 500;
+  const usedRatio = used / TEXT_LIMIT;
+  const atLimit = remaining === 0;
+
+  const fields = (
+    <div className="flex flex-col gap-3 p-4">
+      <Textarea
+        placeholder={COMPOSER_PROMPTS[promptIndex]}
+        value={value}
+        onChange={(e) => handleChange(e.target.value)}
+        onKeyDown={(event) => {
+          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+            event.preventDefault();
+            if (value.trim() && !pending) onSubmit();
+          }
+        }}
+        className="resize-none text-sm min-h-[120px] border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+        autoFocus={autoFocus}
+        aria-describedby={atLimit ? `${testId}-limit` : undefined}
+        data-testid={testId}
+      />
+      <div className="h-px w-full rounded-full bg-primary/35 overflow-hidden" aria-hidden>
+        <div
+          className={cn(
+            "h-full rounded-full transition-[width,background-color] duration-200",
+            atLimit ? "bg-destructive" : "bg-primary/80",
+          )}
+          style={{ width: `${Math.max((1 - usedRatio) * 100, 0)}%` }}
+        />
+      </div>
+      {trimmed && (
+        <p id={`${testId}-limit`} className="text-xs text-destructive" data-testid={`${testId}-limit`}>
+          Too long. We kept the first {TEXT_LIMIT} characters. The rest was not taken.
+        </p>
+      )}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span
+            className={cn(
+              "text-[11px] tabular-nums tracking-wide",
+              atLimit ? "text-destructive" : remaining < 200 ? "text-primary" : "text-muted-foreground",
+            )}
+            data-testid={`${testId}-count`}
+          >
+            {used} / {TEXT_LIMIT}
+          </span>
+          <span className="text-[10px] text-muted-foreground/80">
+            {modKey} Enter to drop
+          </span>
+        </div>
+        <Button
+          onClick={onSubmit}
+          disabled={!value.trim() || pending}
+          data-testid={testId === "input-pidaka-content" ? "button-post-pidaka" : "button-post-pidaka-overlay"}
+        >
+          <Send className="h-4 w-4 mr-1.5" />
+          {pending ? "Dropping..." : "Drop it on the wall"}
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
-    <Card className="overflow-hidden border-border/70 bg-card/95 backdrop-blur-xl">
-      <CardContent className="pt-4 pb-4 flex flex-col gap-3">
-        <Textarea
-          placeholder={COMPOSER_PROMPTS[promptIndex]}
-          value={value}
-          onChange={(e) => onChange(e.target.value.slice(0, 500))}
-          className="resize-none text-sm min-h-[84px] border-0 bg-muted/50 focus-visible:ring-1 focus-visible:ring-primary/30"
-          data-testid="input-pidaka-content"
-        />
-        <div className="h-[2px] w-full rounded-full bg-border overflow-hidden" aria-hidden>
-          <div
-            className="h-full bg-primary/80 rounded-full transition-[width] duration-200"
-            style={{ width: `${Math.max((1 - used) * 100, 0)}%` }}
-          />
-        </div>
-        <div className="flex items-center justify-end">
+    <div className="composer-glass rounded-xl border">
+      {fields}
+    </div>
+  );
+}
+
+export function ComposeFab({
+  visible,
+  onClick,
+}: {
+  visible: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          className="pointer-events-none fixed z-40"
+          style={{
+            right: "max(1rem, env(safe-area-inset-right))",
+            bottom: "max(1.25rem, env(safe-area-inset-bottom))",
+          }}
+          initial={{ opacity: 0, y: 12, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 12, scale: 0.96 }}
+          transition={{ duration: 0.2 }}
+        >
           <Button
-            onClick={onSubmit}
-            disabled={!value.trim() || pending}
-            data-testid="button-post-pidaka"
+            type="button"
+            className="pointer-events-auto h-12 rounded-full px-4 shadow-lg sm:h-12 sm:px-5"
+            onClick={onClick}
+            data-testid="button-compose-anywhere"
           >
-            <Send className="h-4 w-4 mr-1.5" />
-            {pending ? "Dropping..." : "Drop it on the wall"}
+            <BurningCookieIcon className="h-4 w-4 mr-2" isLit />
+            Drop it
           </Button>
-        </div>
-      </CardContent>
-    </Card>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+export function ComposeOverlay({
+  open,
+  value,
+  pending,
+  onChange,
+  onSubmit,
+  onClose,
+}: {
+  open: boolean;
+  value: string;
+  pending: boolean;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center p-0 sm:p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/30"
+            aria-label="Close composer"
+            onClick={onClose}
+          />
+          <motion.div
+            role="dialog"
+            aria-label="Say it to the wall"
+            className="relative z-10 w-full max-w-2xl px-4 pb-[max(0px,env(safe-area-inset-bottom))]"
+            initial={{ y: 28, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 16, opacity: 0 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            data-testid="compose-overlay"
+          >
+            <PidakaComposer
+              value={value}
+              pending={pending}
+              isGuest={false}
+              onChange={onChange}
+              onSubmit={onSubmit}
+              onGuestClick={() => undefined}
+              autoFocus
+              testId="input-pidaka-content-overlay"
+            />
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

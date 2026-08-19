@@ -53,7 +53,7 @@ export function NameReveal({ name, onComplete }: NameRevealProps) {
           initial={reduced ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4 }}
-          className="text-[11px] uppercase tracking-[0.42em] text-muted-foreground"
+          className="text-[11px] uppercase tracking-[0.42em] text-white/55"
         >
           We named you
         </motion.p>
@@ -61,7 +61,7 @@ export function NameReveal({ name, onComplete }: NameRevealProps) {
           initial={reduced ? false : { opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: reduced ? 0 : 0.35, ease: [0.16, 1, 0.3, 1] }}
-          className="font-serif text-5xl md:text-6xl tracking-tight"
+          className="font-serif text-5xl md:text-6xl tracking-tight text-[#f4efe8]"
           data-testid="text-revealed-name"
         >
           {name}
@@ -70,7 +70,7 @@ export function NameReveal({ name, onComplete }: NameRevealProps) {
           initial={reduced ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.45, delay: reduced ? 0 : 0.9 }}
-          className="max-w-xs text-sm text-muted-foreground leading-relaxed"
+          className="max-w-xs text-sm text-white/55 leading-relaxed"
         >
           This name is only yours. The wall will never show it.
         </motion.p>
@@ -79,7 +79,7 @@ export function NameReveal({ name, onComplete }: NameRevealProps) {
       <button
         type="button"
         onClick={finish}
-        className="absolute bottom-8 right-8 text-[10px] uppercase tracking-[0.35em] text-muted-foreground/80 hover:text-foreground transition-colors"
+        className="absolute bottom-8 right-8 text-[10px] uppercase tracking-[0.35em] text-white/45 hover:text-white transition-colors"
         data-testid="button-skip-reveal"
       >
         Enter

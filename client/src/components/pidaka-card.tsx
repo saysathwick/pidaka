@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { BurningCookieIcon } from "@/components/burning-cookie-icon";
-import { getExpiryState } from "@/lib/time";
+import { TextPager } from "@/components/paged-copy";
 import { cn } from "@/lib/utils";
+import { paginateText } from "@/lib/text-pages";
 
 export interface PidakaItem {
   id: string;
@@ -22,15 +23,37 @@ interface PidakaCardProps {
 }
 
 export function PidakaCard({ pidaka, onBurn, arrived, onSeen }: PidakaCardProps) {
-  const [now, setNow] = useState(() => Date.now());
   const rootRef = useRef<HTMLDivElement>(null);
   const reported = useRef(false);
+  const pages = useMemo(() => paginateText(pidaka.content), [pidaka.content]);
+  const [page, setPage] = useState(0);
+  const [engaged, setEngaged] = useState(false);
+  const [hoverFine, setHoverFine] = useState(false);
 
   useEffect(() => {
-    const tick = () => setNow(Date.now());
-    const id = window.setInterval(tick, 15000);
-    return () => window.clearInterval(id);
+    setHoverFine(window.matchMedia("(hover: hover) and (pointer: fine)").matches);
   }, []);
+
+  useEffect(() => {
+    setPage(0);
+    setEngaged(false);
+  }, [pidaka.id, pidaka.content]);
+
+  useEffect(() => {
+    if (!engaged || pages.length <= 1) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setPage((current) => Math.max(0, current - 1));
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setPage((current) => Math.min(pages.length - 1, current + 1));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [engaged, pages.length]);
 
   useEffect(() => {
     if (pidaka.isOwn || pidaka.seen || !onSeen) return;
@@ -49,50 +72,66 @@ export function PidakaCard({ pidaka, onBurn, arrived, onSeen }: PidakaCardProps)
     return () => observer.disconnect();
   }, [pidaka.id, pidaka.isOwn, pidaka.seen, onSeen]);
 
-  const expiry = getExpiryState(pidaka.expiresAt, now);
+  const index = Math.min(page, pages.length - 1);
+  const multi = pages.length > 1;
 
   return (
-    <Card
+    <div
       ref={rootRef}
-      className={cn(
-        "hover-elevate overflow-hidden transition-colors duration-300",
-        expiry.isDying && "border-destructive/40 bg-destructive/[0.04]",
-        arrived && "ring-1 ring-primary/35",
-      )}
-      data-testid={`card-pidaka-${pidaka.id}`}
+      className="relative h-56"
+      onMouseEnter={() => {
+        if (multi) setEngaged(true);
+      }}
+      onMouseLeave={() => {
+        if (!hoverFine) return;
+        setEngaged(false);
+        setPage(0);
+      }}
+      onClick={() => {
+        if (multi) setEngaged(true);
+      }}
     >
-      <CardContent className="pt-5 pb-4 flex flex-col gap-4">
-        <p
-          className="text-[15px] leading-relaxed whitespace-pre-wrap break-words"
-          data-testid={`text-content-${pidaka.id}`}
-        >
-          {pidaka.content}
-        </p>
-        <div className="flex flex-col gap-2">
-          <div
-            className="h-[2px] w-full rounded-full bg-border overflow-hidden"
-            aria-hidden
+      <div
+        className={cn(
+          "composer-glass flex h-full flex-col rounded-xl border hover-elevate active-elevate-2",
+          arrived && "ring-1 ring-primary/35",
+          pidaka.isOwn && "own-pidaka",
+        )}
+        data-testid={`card-pidaka-${pidaka.id}`}
+      >
+        <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden px-5 pt-5 pb-4">
+          <p
+            className="min-h-0 flex-1 overflow-hidden text-[15px] leading-relaxed whitespace-pre-wrap break-words"
+            data-testid={`text-content-${pidaka.id}`}
           >
-            <div
-              className={cn(
-                "h-full origin-left rounded-full",
-                expiry.isDying ? "bg-destructive fuse-dying" : "bg-primary",
+            {pages[index]}
+          </p>
+          <div className="mt-auto flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <time
+                className="text-[11px] text-muted-foreground tabular-nums"
+                dateTime={pidaka.createdAt}
+                data-testid={`text-time-${pidaka.id}`}
+              >
+                {formatDistanceToNow(new Date(pidaka.createdAt), { addSuffix: true })}
+              </time>
+              {multi && (
+                engaged ? (
+                  <TextPager
+                    page={index}
+                    pages={pages.length}
+                    onPage={setPage}
+                    id={pidaka.id}
+                  />
+                ) : (
+                  <span className="text-[11px] tabular-nums tracking-[0.16em] text-muted-foreground/70">
+                    {index + 1}/{pages.length}
+                  </span>
+                )
               )}
-              style={{ width: `${Math.max(expiry.ratio * 100, 1.5)}%` }}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span
-              className={cn(
-                "text-[11px] uppercase tracking-[0.18em]",
-                expiry.isDying ? "text-destructive" : "text-muted-foreground",
-              )}
-              data-testid={`text-time-${pidaka.id}`}
-            >
-              {expiry.label}
-            </span>
+            </div>
             {pidaka.isOwn ? (
-              <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="text-[11px] uppercase tracking-[0.18em] text-primary">
                 yours
               </span>
             ) : (
@@ -109,7 +148,7 @@ export function PidakaCard({ pidaka, onBurn, arrived, onSeen }: PidakaCardProps)
             )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

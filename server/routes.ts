@@ -5,7 +5,32 @@ import { storage } from "./storage";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import cron from "node-cron";
-import { registerSchema, loginSchema, insertPidakaSchema, insertBurnSchema } from "@shared/schema";
+import {
+  registerSchema,
+  loginSchema,
+  insertPidakaSchema,
+  insertBurnSchema,
+  phoneStartSchema,
+  phoneVerifySchema,
+} from "@shared/schema";
+import {
+  appleAuthUrl,
+  appleConfigured,
+  appleProfile,
+  consumePhoneCode,
+  demoOAuthEnabled,
+  findOrCreateAuthUser,
+  googleAuthUrl,
+  googleConfigured,
+  googleProfile,
+  issuePhoneCode,
+  normalizePhone,
+  publicOrigin,
+  readOAuthState,
+  sendPhoneCode,
+  signAppToken,
+  signOAuthState,
+} from "./identity";
 import { generateAnonymousName } from "@shared/names";
 import { log } from "./index";
 
@@ -90,7 +115,8 @@ export async function registerRoutes(
         return res.status(400).json({ message: parsed.error.errors[0].message });
       }
 
-      const { email, password } = parsed.data;
+      const email = parsed.data.email.toLowerCase();
+      const { password } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
         return res.status(409).json({ message: "Email already registered" });
@@ -102,6 +128,7 @@ export async function registerRoutes(
       const user = await storage.createUser({
         email,
         password: hashedPassword,
+        authProvider: "password",
         anonymousName,
       });
 
@@ -109,6 +136,7 @@ export async function registerRoutes(
 
       return res.status(201).json({
         token,
+        created: true,
         user: await publicUser(user.id, {
           anonymousName: user.anonymousName,
           burnsSentCount: user.burnsSentCount,
@@ -127,9 +155,10 @@ export async function registerRoutes(
         return res.status(400).json({ message: parsed.error.errors[0].message });
       }
 
-      const { email, password } = parsed.data;
+      const email = parsed.data.email.toLowerCase();
+      const { password } = parsed.data;
       const user = await storage.getUserByEmail(email);
-      if (!user) {
+      if (!user || !user.password) {
         return res.status(401).json({ message: "Invalid email or password" });
       }
 
@@ -150,6 +179,145 @@ export async function registerRoutes(
       });
     } catch (err: any) {
       return res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  function finishRedirect(res: Response, origin: string, token: string, created: boolean) {
+    const params = new URLSearchParams({ token });
+    if (created) params.set("named", "1");
+    return res.redirect(`${origin}/?${params.toString()}`);
+  }
+
+  app.get("/api/auth/google", async (req: Request, res: Response) => {
+    const origin = publicOrigin(req);
+    if (googleConfigured()) {
+      return res.redirect(googleAuthUrl(origin, signOAuthState("google")));
+    }
+    if (!demoOAuthEnabled()) {
+      return res.redirect(`${origin}/?authError=google`);
+    }
+    try {
+      const { user, created } = await findOrCreateAuthUser({
+        provider: "google",
+        subject: "demo-google",
+        email: "demo.google@users.pidaka",
+      });
+      return finishRedirect(res, origin, signAppToken(user.id), created);
+    } catch {
+      return res.redirect(`${origin}/?authError=google`);
+    }
+  });
+
+  app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
+    const origin = publicOrigin(req);
+    try {
+      const code = typeof req.query.code === "string" ? req.query.code : "";
+      const state = typeof req.query.state === "string" ? req.query.state : "";
+      if (!code || readOAuthState(state) !== "google") {
+        return res.redirect(`${origin}/?authError=google`);
+      }
+      const profile = await googleProfile(origin, code);
+      const { user, created } = await findOrCreateAuthUser({
+        provider: "google",
+        subject: profile.subject,
+        email: profile.email,
+      });
+      return finishRedirect(res, origin, signAppToken(user.id), created);
+    } catch {
+      return res.redirect(`${origin}/?authError=google`);
+    }
+  });
+
+  app.get("/api/auth/apple", async (req: Request, res: Response) => {
+    const origin = publicOrigin(req);
+    if (appleConfigured()) {
+      return res.redirect(appleAuthUrl(origin, signOAuthState("apple")));
+    }
+    if (!demoOAuthEnabled()) {
+      return res.redirect(`${origin}/?authError=apple`);
+    }
+    try {
+      const { user, created } = await findOrCreateAuthUser({
+        provider: "apple",
+        subject: "demo-apple",
+        email: "demo.apple@users.pidaka",
+      });
+      return finishRedirect(res, origin, signAppToken(user.id), created);
+    } catch {
+      return res.redirect(`${origin}/?authError=apple`);
+    }
+  });
+
+  app.post("/api/auth/apple/callback", async (req: Request, res: Response) => {
+    const origin = publicOrigin(req);
+    try {
+      const code = typeof req.body?.code === "string" ? req.body.code : "";
+      const state = typeof req.body?.state === "string" ? req.body.state : "";
+      if (!code || readOAuthState(state) !== "apple") {
+        return res.redirect(`${origin}/?authError=apple`);
+      }
+      const profile = await appleProfile(origin, code);
+      const { user, created } = await findOrCreateAuthUser({
+        provider: "apple",
+        subject: profile.subject,
+        email: profile.email,
+      });
+      return finishRedirect(res, origin, signAppToken(user.id), created);
+    } catch {
+      return res.redirect(`${origin}/?authError=apple`);
+    }
+  });
+
+  app.post("/api/auth/phone/start", async (req: Request, res: Response) => {
+    try {
+      const parsed = phoneStartSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0].message });
+      }
+      const phone = normalizePhone(parsed.data.phone);
+      if (!phone) {
+        return res.status(400).json({ message: "Enter a valid phone number" });
+      }
+      const code = issuePhoneCode(phone);
+      const sent = await sendPhoneCode(phone, code);
+      return res.json({
+        ok: true,
+        demoCode: sent.delivered ? undefined : code,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message || "Could not send the code" });
+    }
+  });
+
+  app.post("/api/auth/phone/verify", async (req: Request, res: Response) => {
+    try {
+      const parsed = phoneVerifySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0].message });
+      }
+      const phone = normalizePhone(parsed.data.phone);
+      if (!phone) {
+        return res.status(400).json({ message: "Enter a valid phone number" });
+      }
+      if (!consumePhoneCode(phone, parsed.data.code)) {
+        return res.status(401).json({ message: "That code is wrong or has expired" });
+      }
+      const { user, created } = await findOrCreateAuthUser({
+        provider: "phone",
+        subject: phone,
+        phone,
+      });
+      return res.json({
+        token: signAppToken(user.id),
+        created,
+        user: await publicUser(user.id, {
+          anonymousName: user.anonymousName,
+          burnsSentCount: user.burnsSentCount,
+          burnsReceivedCount: user.burnsReceivedCount,
+        }),
+      });
+    } catch {
+      return res.status(500).json({ message: "Phone sign-in failed" });
     }
   });
 
@@ -191,17 +359,12 @@ export async function registerRoutes(
       const queued = queuedIds
         .map((id) => byId.get(id))
         .filter((p): p is NonNullable<typeof p> => Boolean(p));
-      const queuedIdSet = new Set(queued.map((p) => p.id));
-      const own = viewerId
-        ? activePidakas.filter((p) => p.creatorUserId === viewerId && !queuedIdSet.has(p.id))
-        : [];
-      const ordered = [...queued, ...own];
-      return res.json(ordered.map((p) => ({
+      return res.json(queued.map((p) => ({
         id: p.id,
         content: p.content,
         createdAt: p.createdAt,
         expiresAt: p.expiresAt,
-        isOwn: viewerId ? p.creatorUserId === viewerId : false,
+        isOwn: false,
         seen: seenSet.has(p.id),
       })));
     } catch {
@@ -288,15 +451,56 @@ export async function registerRoutes(
 
   app.get("/api/burns/inbox", authMiddleware as any, async (req: AuthRequest, res: Response) => {
     try {
-      const inbox = await storage.getUserBurnsInbox(req.userId!);
-      const safeInbox = inbox.map((b) => ({
-        id: b.id,
-        message: b.message,
-        createdAt: b.createdAt,
-        readAt: b.readAt,
-        pidakaExcerpt: b.pidakaExcerpt,
+      const userId = req.userId!;
+      const mine = await storage.getPidakasByCreator(userId);
+      const inbox = await storage.getUserBurnsInbox(userId);
+      const burnsByPidaka = new Map<string, typeof inbox>();
+      for (const burn of inbox) {
+        const list = burnsByPidaka.get(burn.pidakaId) ?? [];
+        list.push(burn);
+        burnsByPidaka.set(burn.pidakaId, list);
+      }
+
+      const seen = new Set(mine.map((p) => p.id));
+      const threads = mine.map((p) => ({
+        id: p.id,
+        content: p.content,
+        createdAt: p.createdAt,
+        live: true,
+        burns: (burnsByPidaka.get(p.id) ?? [])
+          .slice()
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .map((b) => ({
+          id: b.id,
+          message: b.message,
+          createdAt: b.createdAt,
+          readAt: b.readAt,
+        })),
       }));
-      return res.json(safeInbox);
+
+      for (const [pidakaId, list] of Array.from(burnsByPidaka.entries())) {
+        if (seen.has(pidakaId)) continue;
+        const newest = [...list].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )[0];
+        threads.push({
+          id: pidakaId,
+          content: newest?.pidakaExcerpt || "Your pidaka",
+          createdAt: newest?.createdAt ?? new Date(),
+          live: false,
+          burns: list
+            .slice()
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .map((b) => ({
+            id: b.id,
+            message: b.message,
+            createdAt: b.createdAt,
+            readAt: b.readAt,
+          })),
+        });
+      }
+
+      return res.json({ threads });
     } catch {
       return res.status(500).json({ message: "Failed to fetch inbox" });
     }

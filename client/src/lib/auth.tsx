@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { apiRequest } from "./queryClient";
 
 interface UserData {
@@ -8,16 +8,23 @@ interface UserData {
   unreadCount: number;
 }
 
+interface SessionPayload {
+  token: string;
+  user: UserData & { unreadCount?: number };
+  created?: boolean;
+}
+
 interface AuthContextType {
   user: UserData | null;
   token: string | null;
   isLoading: boolean;
   justNamed: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  authError: string | null;
+  completeSession: (data: SessionPayload) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
   clearJustNamed: () => void;
+  clearAuthError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -27,6 +34,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem("pidaka_token"));
   const [isLoading, setIsLoading] = useState(true);
   const [justNamed, setJustNamed] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const namedRef = useRef(false);
+
+  const applyUser = useCallback((userData: UserData, nextToken: string, created?: boolean) => {
+    localStorage.setItem("pidaka_token", nextToken);
+    setToken(nextToken);
+    setUser({ ...userData, unreadCount: userData.unreadCount ?? 0 });
+    if (created) setJustNamed(userData.anonymousName);
+  }, []);
 
   const refreshUser = useCallback(async () => {
     const storedToken = localStorage.getItem("pidaka_token");
@@ -43,6 +59,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const userData = await res.json();
         setUser({ ...userData, unreadCount: userData.unreadCount ?? 0 });
         setToken(storedToken);
+        if (namedRef.current) {
+          setJustNamed(userData.anonymousName);
+          namedRef.current = false;
+        }
       } else {
         localStorage.removeItem("pidaka_token");
         setUser(null);
@@ -58,24 +78,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refreshUser();
+    const params = new URLSearchParams(window.location.search);
+    const inbound = params.get("token");
+    const named = params.get("named");
+    const error = params.get("authError");
+    if (error) {
+      setAuthError(error === "apple" ? "Apple sign-in did not finish." : "Google sign-in did not finish.");
+    }
+    if (named === "1") namedRef.current = true;
+    if (inbound) {
+      localStorage.setItem("pidaka_token", inbound);
+      setToken(inbound);
+    }
+    if (inbound || named || error) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("token");
+      url.searchParams.delete("named");
+      url.searchParams.delete("authError");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+    void refreshUser();
   }, [refreshUser]);
 
-  const login = async (email: string, password: string) => {
-    const res = await apiRequest("POST", "/api/auth/login", { email, password });
-    const data = await res.json();
-    localStorage.setItem("pidaka_token", data.token);
-    setToken(data.token);
-    setUser({ ...data.user, unreadCount: data.user.unreadCount ?? 0 });
-  };
-
-  const register = async (email: string, password: string) => {
-    const res = await apiRequest("POST", "/api/auth/register", { email, password });
-    const data = await res.json();
-    localStorage.setItem("pidaka_token", data.token);
-    setToken(data.token);
-    setUser({ ...data.user, unreadCount: data.user.unreadCount ?? 0 });
-    setJustNamed(data.user.anonymousName);
+  const completeSession = (data: SessionPayload) => {
+    applyUser({ ...data.user, unreadCount: data.user.unreadCount ?? 0 }, data.token, data.created);
   };
 
   const logout = () => {
@@ -86,9 +112,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const clearJustNamed = useCallback(() => setJustNamed(null), []);
+  const clearAuthError = useCallback(() => setAuthError(null), []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, justNamed, login, register, logout, refreshUser, clearJustNamed }}>
+    <AuthContext.Provider value={{
+      user,
+      token,
+      isLoading,
+      justNamed,
+      authError,
+      completeSession,
+      logout,
+      refreshUser,
+      clearJustNamed,
+      clearAuthError,
+    }}>
       {children}
     </AuthContext.Provider>
   );
