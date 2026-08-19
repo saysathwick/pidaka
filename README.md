@@ -31,38 +31,4 @@ Not a place that keeps your real name on the plaster.
 
 If you want likes, go where likes live.
 
----
-
-## Run it locally
-
-Node 20+. Copy `.env.example` to `.env` and give it a `SESSION_SECRET`.
-
-```bash
-npm install
-npm run dev
-```
-
-Open [http://localhost:5000](http://localhost:5000).
-
-With no `DATABASE_URL`, the wall is an in-memory demo. Restart and the village forgets. For a wall that remembers, set Postgres and run:
-
-```bash
-npm run db:push
-```
-
-Google, Apple, and phone are optional. Email still works. On this machine, a phone code may simply appear in the dialog.
-
-```bash
-npm run check    # types
-npm run build    # production
-```
-
----
-
-## Stack
-
-React and Vite on the front. Express, JWT, Drizzle, and Postgres on the back. One process serves the glass and the API. The doorstep queue is its own library: every live pidaka, every other person.
-
----
-
 The wall is listening. It will not keep your name.
