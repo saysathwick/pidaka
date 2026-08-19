@@ -36,12 +36,12 @@ const health = conservation({
 
 This package is logic only. Storage, HTTP, and auth stay in the host app.
 
-Published at [github.com/saysathwick/pidaka-doorstep](https://github.com/saysathwick/pidaka-doorstep).
+Published in git at [`packages/doorstep`](https://github.com/saysathwick/pidaka/tree/staging/packages/doorstep). Pidaka uses it as a local package:
 
 ```json
 {
   "dependencies": {
-    "@pidaka/doorstep": "github:saysathwick/pidaka-doorstep"
+    "@pidaka/doorstep": "file:packages/doorstep"
   }
 }
 ```
