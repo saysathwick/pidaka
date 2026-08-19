@@ -1,12 +1,11 @@
 import { defineConfig } from "drizzle-kit";
+import { databaseUsesSsl } from "./shared/pg-ssl";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL, ensure the database is provisioned");
 }
 
-const production =
-  process.env.NODE_ENV === "production" ||
-  /[?&]sslmode=/.test(process.env.DATABASE_URL);
+const useSsl = databaseUsesSsl(process.env.DATABASE_URL);
 
 export default defineConfig({
   out: "./migrations",
@@ -14,6 +13,6 @@ export default defineConfig({
   dialect: "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL,
-    ssl: production ? { rejectUnauthorized: false } : undefined,
+    ssl: useSsl ? { rejectUnauthorized: false } : false,
   },
 });

@@ -6,6 +6,6 @@ builder = "railpack"
 buildCommand = "npm install --include=dev && npm run build"
 
 [deploy]
-startCommand = "npm run db:push && npm start"
+startCommand = "npm start"
 healthcheckPath = "/"
 restartPolicyType = "on_failure"

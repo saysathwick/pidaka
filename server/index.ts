@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { isDemoMode } from "./db";
+import { ensureSchema } from "./ensure-schema";
 
 const app = express();
 const httpServer = createServer(app);
@@ -62,6 +63,16 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  if (!isDemoMode) {
+    try {
+      await ensureSchema();
+      log("postgres schema ready");
+    } catch (err) {
+      console.error("postgres is not reachable or schema could not be created", err);
+      process.exit(1);
+    }
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

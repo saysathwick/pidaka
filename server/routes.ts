@@ -61,6 +61,11 @@ interface AuthRequest extends Request {
   userId?: string;
 }
 
+function serverError(res: Response, message: string, err: unknown) {
+  console.error(message, err);
+  return res.status(500).json({ message });
+}
+
 function viewerIdFrom(req: AuthRequest): string | undefined {
   if (req.userId) return req.userId;
   const header = req.headers["x-pidaka-viewer"];
@@ -144,7 +149,7 @@ export async function registerRoutes(
         }),
       });
     } catch (err: any) {
-      return res.status(500).json({ message: "Registration failed" });
+      return serverError(res, "Registration failed", err);
     }
   });
 
@@ -178,7 +183,7 @@ export async function registerRoutes(
         }),
       });
     } catch (err: any) {
-      return res.status(500).json({ message: "Login failed" });
+      return serverError(res, "Login failed", err);
     }
   });
 
@@ -367,8 +372,8 @@ export async function registerRoutes(
         isOwn: false,
         seen: seenSet.has(p.id),
       })));
-    } catch {
-      return res.status(500).json({ message: "Failed to fetch pidakas" });
+    } catch (err) {
+      return serverError(res, "Failed to fetch pidakas", err);
     }
   });
 
