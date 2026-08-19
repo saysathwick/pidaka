@@ -43,11 +43,13 @@ function IconAction({
   );
 }
 
+export type HeaderPlace = "wall" | "burns" | "legal";
+
 export function AppHeader({
   place,
   fetching,
 }: {
-  place: "wall" | "burns";
+  place: HeaderPlace;
   fetching?: boolean;
 }) {
   const { user, logout } = useAuth();
@@ -56,6 +58,9 @@ export function AppHeader({
   const [location, navigate] = useLocation();
   const unread = user?.unreadCount ?? 0;
   const [busy, setBusy] = useState(false);
+
+  const aboutOpen =
+    location === "/about" || location === "/privacy" || location === "/terms" || location === "/contact";
 
   useEffect(() => {
     if (!fetching) {
@@ -76,21 +81,34 @@ export function AppHeader({
           data-testid="text-brand"
         >
           <BurningCookieIcon className="h-7 w-7 shrink-0" isLit={place === "burns" || Boolean(user)} />
-          <span className="font-serif text-xl tracking-[0.18em] uppercase">Pidaka</span>
-          {place === "wall" && (
-            <span className="hidden sm:inline-flex items-center gap-1.5 pl-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary ember-breathe" />
-              Listening
-            </span>
-          )}
-          {place === "burns" && (
-            <span className="hidden sm:inline text-[10px] uppercase tracking-[0.2em] text-muted-foreground" data-testid="text-inbox-title">
-              Burns
-            </span>
-          )}
+          <span className="flex min-w-0 flex-col justify-center">
+            <span className="font-serif text-xl leading-none tracking-[0.18em] uppercase">Pidaka</span>
+            {place === "wall" && (
+              <span className="mt-1 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary ember-breathe" />
+                Listening
+              </span>
+            )}
+            {place === "burns" && (
+              <span className="mt-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground" data-testid="text-inbox-title">
+                Burns
+              </span>
+            )}
+          </span>
         </button>
 
-        <div className="flex items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            className={cn(
+              "mr-1 hidden px-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground md:inline",
+              aboutOpen && "text-foreground",
+            )}
+            onClick={() => navigate("/about")}
+            data-testid="link-header-about"
+          >
+            About
+          </button>
           {user ? (
             <>
               <span

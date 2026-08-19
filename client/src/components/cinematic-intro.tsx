@@ -9,6 +9,8 @@ export function shouldPlayIntro() {
   if (typeof window === "undefined") return false;
   const params = new URLSearchParams(window.location.search);
   if (params.has("intro")) return true;
+  const path = window.location.pathname.replace(/\/$/, "") || "/";
+  if (path !== "/") return false;
   return localStorage.getItem(INTRO_KEY) !== "1";
 }
 

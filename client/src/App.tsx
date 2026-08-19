@@ -11,6 +11,8 @@ import { AuthDialog } from "@/pages/auth";
 import WallPage from "@/pages/wall";
 import InboxPage from "@/pages/inbox";
 import NotFound from "@/pages/not-found";
+import AboutPage from "@/pages/about";
+import { usePageMeta } from "@/lib/page-meta";
 import { CinematicIntro, shouldPlayIntro } from "@/components/cinematic-intro";
 import { NameReveal } from "@/components/name-reveal";
 import { BurningCookieIcon } from "@/components/burning-cookie-icon";
@@ -36,6 +38,7 @@ function AppContent() {
   const { isLoading, justNamed, clearJustNamed } = useAuth();
   const [location] = useLocation();
   const [introDone, setIntroDone] = useState(() => !shouldPlayIntro());
+  usePageMeta(location);
 
   if (!introDone) {
     return <CinematicIntro onComplete={() => setIntroDone(true)} />;
@@ -60,7 +63,11 @@ function AppContent() {
     <>
       <AnimatePresence mode="wait">
         <motion.div
-          key={location}
+          key={
+            location === "/privacy" || location === "/terms" || location === "/contact" || location === "/about"
+              ? "/about"
+              : location
+          }
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -73,6 +80,10 @@ function AppContent() {
                 <InboxPage />
               </RequireAuth>
             </Route>
+            <Route path="/about" component={AboutPage} />
+            <Route path="/privacy" component={AboutPage} />
+            <Route path="/terms" component={AboutPage} />
+            <Route path="/contact" component={AboutPage} />
             <Route component={NotFound} />
           </Switch>
         </motion.div>

@@ -4,7 +4,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AppHeader } from "@/components/app-header";
+import { SiteShell } from "@/components/site-shell";
 import { BurningCookieIcon } from "@/components/burning-cookie-icon";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
@@ -60,9 +60,7 @@ export default function InboxPage() {
   }, [unreadCount, refreshUser]);
 
   return (
-    <div className="min-h-screen bg-background wall-atmosphere">
-      <AppHeader place="burns" fetching={isFetching && !isLoading} />
-
+    <SiteShell place="burns" fetching={isFetching && !isLoading}>
       <main className="max-w-2xl mx-auto px-4 py-5 flex flex-col gap-6">
         {user && !isLoading && (
           <p className="text-xs text-muted-foreground" data-testid="text-inbox-count">
@@ -169,6 +167,6 @@ export default function InboxPage() {
           </div>
         )}
       </main>
-    </div>
+    </SiteShell>
   );
 }

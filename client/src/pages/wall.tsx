@@ -6,7 +6,7 @@ import { useAuthModal } from "@/lib/auth-modal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { AppHeader } from "@/components/app-header";
+import { SiteShell } from "@/components/site-shell";
 import { BurningCookieIcon } from "@/components/burning-cookie-icon";
 import { PidakaCard, type PidakaItem } from "@/components/pidaka-card";
 import { ComposeFab, ComposeOverlay, PidakaComposer } from "@/components/pidaka-composer";
@@ -149,9 +149,7 @@ export default function WallPage() {
   );
 
   return (
-    <div className="min-h-screen bg-background wall-atmosphere">
-      <AppHeader place="wall" fetching={isFetching && !isLoading} />
-
+    <SiteShell place="wall" fetching={isFetching && !isLoading} paddedFooter>
       <main className="max-w-6xl mx-auto px-4 pt-6 pb-28 sm:pb-12 flex flex-col gap-5">
         <div ref={composerRef} className="max-w-2xl mx-auto md:mx-0 md:max-w-none">
           {composer}
@@ -247,6 +245,6 @@ export default function WallPage() {
           sendBurn.mutate({ pidakaId: burnTarget.id, message });
         }}
       />
-    </div>
+    </SiteShell>
   );
 }

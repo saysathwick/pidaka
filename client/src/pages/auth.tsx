@@ -17,6 +17,21 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { useToast } from "@/hooks/use-toast";
 import { CowDungCake } from "@/components/burning-cookie-icon";
 import { ArrowLeft, Mail } from "lucide-react";
+import { Link } from "wouter";
+
+function formMessage(err: unknown, fallback: string) {
+  const raw = err instanceof Error ? err.message : fallback;
+  const jsonStart = raw.indexOf("{");
+  if (jsonStart >= 0) {
+    try {
+      const parsed = JSON.parse(raw.slice(jsonStart)) as { message?: string };
+      if (parsed.message) return parsed.message;
+    } catch {
+      // keep the raw error
+    }
+  }
+  return raw.replace(/^\d{3}:\s*/, "") || fallback;
+}
 
 function GoogleMark() {
   return (
@@ -45,11 +60,14 @@ export function AuthForm() {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState<"google" | "apple" | "phone" | "email" | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const { completeSession, authError, clearAuthError } = useAuth();
   const { toast } = useToast();
+  const { hideAuth } = useAuthModal();
 
   useEffect(() => {
     if (!authError) return;
+    setFormError(authError);
     toast({ title: "Sign-in did not take", description: authError, variant: "destructive" });
     clearAuthError();
   }, [authError, clearAuthError, toast]);
@@ -60,6 +78,7 @@ export function AuthForm() {
 
   const submitEmail = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     setLoading("email");
     try {
       const path = emailMode === "register" ? "/api/auth/register" : "/api/auth/login";
@@ -70,10 +89,12 @@ export function AuthForm() {
         created: emailMode === "register" ? true : data.created,
       });
       afterSession();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = formMessage(err, emailMode === "register" ? "Could not create that account" : "Could not sign in");
+      setFormError(message);
       toast({
         title: emailMode === "register" ? "Could not create that account" : "Could not sign in",
-        description: err.message,
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -83,6 +104,7 @@ export function AuthForm() {
 
   const startPhone = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     setLoading("phone");
     try {
       const res = await apiRequest("POST", "/api/auth/phone/start", { phone });
@@ -95,8 +117,10 @@ export function AuthForm() {
           ? `On this local wall the code is ${data.demoCode}`
           : "Check your messages.",
       });
-    } catch (err: any) {
-      toast({ title: "Could not send a code", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const message = formMessage(err, "Could not send a code");
+      setFormError(message);
+      toast({ title: "Could not send a code", description: message, variant: "destructive" });
     } finally {
       setLoading(null);
     }
@@ -104,14 +128,17 @@ export function AuthForm() {
 
   const verifyPhone = async (value: string) => {
     if (value.length !== 6) return;
+    setFormError(null);
     setLoading("phone");
     try {
       const res = await apiRequest("POST", "/api/auth/phone/verify", { phone, code: value });
       const data = await res.json();
       completeSession(data);
       afterSession();
-    } catch (err: any) {
-      toast({ title: "That code did not work", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const message = formMessage(err, "That code did not work");
+      setFormError(message);
+      toast({ title: "That code did not work", description: message, variant: "destructive" });
       setCode("");
     } finally {
       setLoading(null);
@@ -126,6 +153,16 @@ export function AuthForm() {
           We will name you. You will not pick it.
         </p>
       </div>
+
+      {formError && (
+        <p
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive"
+          role="alert"
+          data-testid="text-auth-error"
+        >
+          {formError}
+        </p>
+      )}
 
       {step === "choose" && (
         <div className="flex flex-col gap-2.5">
@@ -175,6 +212,7 @@ export function AuthForm() {
             disabled={loading !== null}
             onClick={() => {
               setEmailMode("register");
+              setFormError(null);
               setStep("email");
             }}
             data-testid="button-auth-email"
@@ -333,6 +371,18 @@ export function AuthForm() {
           <p className="text-xs text-muted-foreground text-center">Sent to {phone}</p>
         </form>
       )}
+
+      <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+        By continuing you agree to the{" "}
+        <Link href="/terms" className="underline underline-offset-2 hover:text-foreground" onClick={hideAuth}>
+          Terms
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground" onClick={hideAuth}>
+          Privacy
+        </Link>
+        .
+      </p>
     </div>
   );
 }

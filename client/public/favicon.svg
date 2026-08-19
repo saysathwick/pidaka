@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="cake" x1="12%" y1="8%" x2="88%" y2="92%">
+      <stop offset="0%" stop-color="#5a3a22"/>
+      <stop offset="42%" stop-color="#3d2414"/>
+      <stop offset="72%" stop-color="#29170c"/>
+      <stop offset="100%" stop-color="#170d07"/>
+    </linearGradient>
+    <radialGradient id="ember" cx="48%" cy="46%" r="42%">
+      <stop offset="0%" stop-color="#c45c26" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#c45c26" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="noise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0.12"/>
+    </filter>
+    <clipPath id="disc">
+      <ellipse cx="16" cy="16.2" rx="14.4" ry="13.7"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#disc)">
+    <rect width="32" height="32" fill="url(#cake)"/>
+    <rect width="32" height="32" filter="url(#noise)" opacity="0.35"/>
+    <ellipse cx="16" cy="12.2" rx="10" ry="6" fill="#734b30" opacity="0.28"/>
+    <ellipse cx="16" cy="21.4" rx="11" ry="5" fill="#000" opacity="0.32"/>
+    <ellipse cx="16" cy="16" rx="7.4" ry="7.4" fill="url(#ember)"/>
+  </g>
+</svg>

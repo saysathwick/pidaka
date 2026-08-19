@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html, body {
+        margin: 0;
+        width: 256px;
+        height: 256px;
+        background: transparent;
+      }
+      .wrap {
+        width: 256px;
+        height: 256px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .cake {
+        width: 220px;
+        height: 220px;
+        position: relative;
+        border-radius: 48% 52% 47% 53% / 53% 46% 54% 47%;
+        overflow: hidden;
+        background: linear-gradient(145deg, #5a3a22 0%, #3d2414 42%, #29170c 72%, #170d07 100%);
+        box-shadow: inset 0 -10px 18px rgba(0, 0, 0, 0.45), inset 0 6px 10px rgba(115, 75, 48, 0.3);
+      }
+      .noise {
+        position: absolute;
+        inset: 0;
+        opacity: 0.55;
+        mix-blend-mode: overlay;
+      }
+      .ember {
+        position: absolute;
+        inset: 20%;
+        border-radius: 50%;
+        background: hsl(17 53% 47% / 0.5);
+        filter: blur(4px);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="cake">
+        <svg class="noise" xmlns="http://www.w3.org/2000/svg">
+          <filter id="n">
+            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch"/>
+            <feColorMatrix type="saturate" values="0.12"/>
+          </filter>
+          <rect width="100%" height="100%" filter="url(#n)"/>
+        </svg>
+        <div class="ember"></div>
+      </div>
+    </div>
+  </body>
+</html>
