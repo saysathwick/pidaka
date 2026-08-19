@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { normalizeDatabaseUrl } from "@shared/pg-ssl";
 
 const envPath = path.resolve(process.cwd(), ".env");
 if (fs.existsSync(envPath)) {
@@ -25,4 +26,9 @@ if (fs.existsSync(envPath)) {
 
 if (!process.env.SESSION_SECRET && process.env.NODE_ENV !== "production") {
   process.env.SESSION_SECRET = "pidaka-local-dev-secret";
+}
+
+const normalizedDatabaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
+if (normalizedDatabaseUrl) {
+  process.env.DATABASE_URL = normalizedDatabaseUrl;
 }
