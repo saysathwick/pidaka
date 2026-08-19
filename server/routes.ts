@@ -1,6 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { queueForViewer } from "@pidaka/doorstep";
+import { queueForViewer } from "doorstep";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -176,18 +176,24 @@ export async function registerRoutes(
       const seenIds = viewerId ? await storage.getSeenIds(viewerId) : [];
       const seenSet = new Set(seenIds);
       const witnessCounts = await storage.getWitnessCounts();
-      const queued = queueForViewer({
+      const queuedIds = queueForViewer({
         items: activePidakas.map((p) => ({
-          ...p,
+          id: p.id,
           creatorId: p.creatorUserId,
+          createdAt: p.createdAt,
+          expiresAt: p.expiresAt,
         })),
         viewerId: viewerId ?? "__anon__",
         seenIds,
         witnessCounts,
       });
-      const queuedIds = new Set(queued.map((p) => p.id));
+      const byId = new Map(activePidakas.map((p) => [p.id, p]));
+      const queued = queuedIds
+        .map((id) => byId.get(id))
+        .filter((p): p is NonNullable<typeof p> => Boolean(p));
+      const queuedIdSet = new Set(queued.map((p) => p.id));
       const own = viewerId
-        ? activePidakas.filter((p) => p.creatorUserId === viewerId && !queuedIds.has(p.id))
+        ? activePidakas.filter((p) => p.creatorUserId === viewerId && !queuedIdSet.has(p.id))
         : [];
       const ordered = [...queued, ...own];
       return res.json(ordered.map((p) => ({
