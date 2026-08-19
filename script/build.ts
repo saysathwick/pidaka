@@ -1,10 +1,12 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
+import path from "path";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
 const allowlist = [
+  "@pidaka/doorstep",
   "@google/generative-ai",
   "axios",
   "connect-pg-simple",
@@ -58,6 +60,9 @@ async function buildAll() {
     minify: true,
     external: externals,
     logLevel: "info",
+    alias: {
+      "@pidaka/doorstep": path.resolve("packages/doorstep/src/index.ts"),
+    },
   });
 }
 

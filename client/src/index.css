@@ -12,12 +12,12 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 0 0% 98%;
+  --background: 30 8% 97%;
   --foreground: 240 10% 10%;
-  --border: 240 6% 90%;
-  --card: 0 0% 100%;
+  --border: 30 8% 88%;
+  --card: 30 20% 99%;
   --card-foreground: 240 10% 10%;
-  --card-border: 240 6% 90%;
+  --card-border: 30 8% 88%;
   --sidebar: 240 5% 96%;
   --sidebar-foreground: 240 10% 10%;
   --sidebar-border: 240 6% 90%;
@@ -47,8 +47,8 @@
   --chart-4: 43 74% 66%;
   --chart-5: 27 87% 67%;
 
-  --font-sans: 'Inter', sans-serif;
-  --font-serif: Georgia, serif;
+  --font-sans: 'Geist', sans-serif;
+  --font-serif: 'Playfair Display', Georgia, serif;
   --font-mono: 'JetBrains Mono', monospace;
   --radius: .5rem;
   --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.04);
@@ -93,23 +93,23 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  --background: 240 10% 6%;
-  --foreground: 0 0% 93%;
-  --border: 240 5% 16%;
-  --card: 240 8% 9%;
-  --card-foreground: 0 0% 93%;
-  --card-border: 240 5% 16%;
-  --sidebar: 240 8% 8%;
-  --sidebar-foreground: 0 0% 93%;
-  --sidebar-border: 240 5% 16%;
+  --background: 240 10% 3.5%;
+  --foreground: 30 12% 94%;
+  --border: 240 6% 12%;
+  --card: 24 12% 6.5%;
+  --card-foreground: 30 12% 94%;
+  --card-border: 24 8% 13%;
+  --sidebar: 240 8% 5%;
+  --sidebar-foreground: 30 12% 94%;
+  --sidebar-border: 240 6% 12%;
   --sidebar-primary: 24 95% 53%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 240 5% 14%;
   --sidebar-accent-foreground: 0 0% 93%;
   --sidebar-ring: 24 95% 53%;
-  --popover: 240 8% 9%;
-  --popover-foreground: 0 0% 93%;
-  --popover-border: 240 5% 16%;
+  --popover: 24 12% 7%;
+  --popover-foreground: 30 12% 94%;
+  --popover-border: 24 8% 13%;
   --primary: 24 95% 53%;
   --primary-foreground: 0 0% 100%;
   --secondary: 240 5% 14%;
@@ -239,5 +239,73 @@
   .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
+  }
+
+  .film-grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 180px 180px;
+    animation: grain-shift 0.45s steps(4) infinite;
+  }
+
+  .intro-vignette {
+    background: radial-gradient(ellipse at center, transparent 38%, #000 100%);
+  }
+
+  .wall-atmosphere {
+    background-color: hsl(var(--background));
+    background-image: radial-gradient(ellipse 80% 50% at 50% -18%, hsl(24 95% 53% / 0.16), transparent 55%);
+  }
+
+  .ember-breathe {
+    animation: ember-breathe 2.4s ease-in-out infinite;
+  }
+
+  .ember-spark {
+    position: absolute;
+    bottom: 72%;
+    width: 3px;
+    height: 3px;
+    border-radius: 999px;
+    background: hsl(24 95% 62%);
+    animation-name: ember-rise;
+    animation-timing-function: ease-out;
+    animation-iteration-count: infinite;
+  }
+
+  .fuse-dying {
+    animation: fuse-pulse 1.15s ease-in-out infinite;
+  }
+}
+
+@keyframes grain-shift {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-1.5%, 2%); }
+  50% { transform: translate(2%, -1%); }
+  75% { transform: translate(-1%, -2%); }
+  100% { transform: translate(0, 0); }
+}
+
+@keyframes ember-breathe {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+@keyframes ember-rise {
+  0% { transform: translateY(0) scale(1); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translateY(-92px) scale(0.25); opacity: 0; }
+}
+
+@keyframes fuse-pulse {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .film-grain,
+  .ember-spark,
+  .ember-breathe,
+  .fuse-dying {
+    animation: none;
   }
 }

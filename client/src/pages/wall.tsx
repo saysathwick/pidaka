@@ -1,47 +1,75 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
+import { useAuthModal } from "@/lib/auth-modal";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, Send, Sun, Moon, LogOut, Zap, MessageCircle } from "lucide-react";
+import { Sun, Moon, LogOut, MessageCircle } from "lucide-react";
 import { BurningCookieIcon } from "@/components/burning-cookie-icon";
+import { PidakaCard, type PidakaItem } from "@/components/pidaka-card";
+import { PidakaComposer } from "@/components/pidaka-composer";
+import { BurnRitual } from "@/components/burn-ritual";
 import { useTheme } from "@/lib/theme";
 import { useLocation } from "wouter";
-import { formatDistanceToNow } from "date-fns";
-
-interface PidakaItem {
-  id: string;
-  content: string;
-  createdAt: string;
-  expiresAt: string;
-}
+import { AnimatePresence, motion } from "framer-motion";
 
 export default function WallPage() {
   const { user, logout, refreshUser } = useAuth();
+  const { showAuth } = useAuthModal();
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
   const [newContent, setNewContent] = useState("");
-  const [burnDialogOpen, setBurnDialogOpen] = useState(false);
-  const [selectedPidakaId, setSelectedPidakaId] = useState<string | null>(null);
-  const [burnMessage, setBurnMessage] = useState("");
+  const [burnTarget, setBurnTarget] = useState<PidakaItem | null>(null);
 
-  const { data: pidakas, isLoading } = useQuery<PidakaItem[]>({
+  const { data: pidakas, isLoading, isError } = useQuery<PidakaItem[]>({
     queryKey: ["/api/pidakas"],
-    refetchInterval: 15000,
+    refetchInterval: 12000,
+    retry: 1,
+    placeholderData: (previous) => previous,
   });
+
+  const knownIdsRef = useRef<Set<string> | null>(null);
+  const seenSent = useRef(new Set<string>());
+  const [sessionOrder, setSessionOrder] = useState<string[] | null>(null);
+
+  const arrivingIds = useMemo(() => {
+    if (!pidakas) return new Set<string>();
+    if (!knownIdsRef.current) return new Set<string>();
+    return new Set(pidakas.filter((p) => !knownIdsRef.current!.has(p.id)).map((p) => p.id));
+  }, [pidakas]);
+
+  useEffect(() => {
+    if (!pidakas) return;
+    knownIdsRef.current = new Set(pidakas.map((p) => p.id));
+    setSessionOrder((prev) => {
+      const liveIds = pidakas.map((p) => p.id);
+      if (!prev) return liveIds;
+      const known = new Set(prev);
+      const newcomers = liveIds.filter((id) => !known.has(id));
+      const live = new Set(liveIds);
+      return [...newcomers, ...prev.filter((id) => live.has(id))];
+    });
+  }, [pidakas]);
+
+  const displayPidakas = useMemo(() => {
+    if (!pidakas) return pidakas;
+    if (!sessionOrder) return pidakas;
+    const byId = new Map(pidakas.map((p) => [p.id, p]));
+    return sessionOrder
+      .map((id) => byId.get(id))
+      .filter((p): p is PidakaItem => Boolean(p));
+  }, [pidakas, sessionOrder]);
+
+  const handleSeen = useCallback((id: string) => {
+    if (seenSent.current.has(id)) return;
+    seenSent.current.add(id);
+    void apiRequest("POST", `/api/pidakas/${id}/seen`);
+  }, []);
 
   const createPidaka = useMutation({
     mutationFn: async (content: string) => {
@@ -51,10 +79,10 @@ export default function WallPage() {
     onSuccess: () => {
       setNewContent("");
       queryClient.invalidateQueries({ queryKey: ["/api/pidakas"] });
-      toast({ title: "Posted", description: "Your pidaka is live on the wall" });
+      toast({ title: "On the wall", description: "Forty-eight hours. Then it is gone." });
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "The wall refused it", description: err.message, variant: "destructive" });
     },
   });
 
@@ -64,212 +92,169 @@ export default function WallPage() {
       return res.json();
     },
     onSuccess: () => {
-      setBurnDialogOpen(false);
-      setBurnMessage("");
-      setSelectedPidakaId(null);
+      setBurnTarget(null);
       refreshUser();
-      toast({ title: "Burn sent", description: "Your anonymous message was delivered" });
+      toast({ title: "Burn sent", description: "Gone. They will not know." });
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "It did not take", description: err.message, variant: "destructive" });
     },
   });
 
   const handlePost = () => {
+    if (!user) {
+      showAuth();
+      return;
+    }
     if (!newContent.trim()) return;
     createPidaka.mutate(newContent.trim());
   };
 
   const handleBurnClick = (pidakaId: string) => {
-    setSelectedPidakaId(pidakaId);
-    setBurnMessage("");
-    setBurnDialogOpen(true);
+    if (!user) {
+      showAuth();
+      return;
+    }
+    const target = pidakas?.find((p) => p.id === pidakaId) ?? null;
+    setBurnTarget(target);
   };
 
-  const handleSendBurn = () => {
-    if (!selectedPidakaId || !burnMessage.trim()) return;
-    sendBurn.mutate({ pidakaId: selectedPidakaId, message: burnMessage.trim() });
-  };
+  const composer = (
+    <PidakaComposer
+      value={newContent}
+      pending={createPidaka.isPending}
+      isGuest={!user}
+      onChange={setNewContent}
+      onSubmit={handlePost}
+      onGuestClick={showAuth}
+    />
+  );
+
+  const unread = user?.unreadCount ?? 0;
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-xl">
+    <div className="min-h-screen bg-background wall-atmosphere">
+      <header className="sticky top-0 z-50 border-b border-border/60 bg-background/70 backdrop-blur-xl">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-2 px-4 py-3">
           <div className="flex items-center gap-2.5" data-testid="text-brand">
-            <div className="relative">
-              <div className="absolute -inset-1 rounded-full bg-primary/20 blur-sm" />
-              <BurningCookieIcon className="h-6 w-6 text-primary relative" />
-            </div>
-            <span className="font-bold text-xl tracking-tight">Pidaka</span>
+            <BurningCookieIcon className="h-7 w-7" />
+            <span className="font-serif text-xl tracking-[0.18em] uppercase">Pidaka</span>
           </div>
           <div className="flex items-center gap-0.5 flex-wrap">
-            <Button size="icon" variant="ghost" onClick={() => navigate("/inbox")} data-testid="button-inbox">
-              <MessageCircle className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="ghost" onClick={toggleTheme} data-testid="button-theme-toggle">
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
-            <Button size="icon" variant="ghost" onClick={logout} data-testid="button-logout">
-              <LogOut className="h-4 w-4" />
-            </Button>
+            {user ? (
+              <>
+                <span className="hidden sm:inline mr-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground" data-testid="text-username">
+                  {user.anonymousName}
+                </span>
+                <Button size="icon" variant="ghost" onClick={() => navigate("/inbox")} data-testid="button-inbox" className="relative">
+                  <MessageCircle className="h-4 w-4" />
+                  {unread > 0 && (
+                    <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary" data-testid="badge-unread" />
+                  )}
+                </Button>
+                <Button size="icon" variant="ghost" onClick={toggleTheme} data-testid="button-theme-toggle">
+                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </Button>
+                <Button size="icon" variant="ghost" onClick={logout} data-testid="button-logout">
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button size="icon" variant="ghost" onClick={toggleTheme} data-testid="button-theme-toggle">
+                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </Button>
+                <Button size="sm" onClick={showAuth} data-testid="button-drop-mask">
+                  Drop your mask
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-5 flex flex-col gap-5">
-        <div className="grid grid-cols-2 gap-3">
-          <Card className="overflow-visible" data-testid="card-burns-sent">
-            <CardContent className="pt-4 pb-4 flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary/10">
-                  <Zap className="h-4 w-4 text-primary" />
-                </div>
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Sent</span>
-              </div>
-              <span className="text-3xl font-bold tracking-tight ml-10" data-testid="text-burns-sent-count">
-                {user?.burnsSentCount ?? 0}
-              </span>
-            </CardContent>
-          </Card>
-          <Card className="overflow-visible" data-testid="card-burns-received">
-            <CardContent className="pt-4 pb-4 flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <div className="flex items-center justify-center w-8 h-8 rounded-md bg-destructive/10">
-                  <BurningCookieIcon className="h-4 w-4 text-destructive" />
-                </div>
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Received</span>
-              </div>
-              <span className="text-3xl font-bold tracking-tight ml-10" data-testid="text-burns-received-count">
-                {user?.burnsReceivedCount ?? 0}
-              </span>
-            </CardContent>
-          </Card>
+      <main className="max-w-2xl mx-auto px-4 pt-6 pb-36 md:pb-10 flex flex-col gap-5">
+        <div className="fixed bottom-0 inset-x-0 z-40 border-t border-border/60 bg-background/90 backdrop-blur-xl px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:static md:inset-auto md:z-auto md:border-0 md:bg-transparent md:backdrop-blur-none md:p-0 md:pb-0">
+          <div className="max-w-2xl mx-auto">
+            {composer}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 px-1">
-          <div className="h-px flex-1 bg-border" />
-          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground" data-testid="text-username">
-            {user?.anonymousName}
-          </span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
-
-        <Card>
-          <CardContent className="pt-4 pb-4 flex flex-col gap-3">
-            <Textarea
-              placeholder="Hey stranger? Wanna share?"
-              value={newContent}
-              onChange={(e) => setNewContent(e.target.value.slice(0, 500))}
-              className="resize-none text-sm min-h-[90px] border-0 bg-muted/50 focus-visible:ring-1 focus-visible:ring-primary/30"
-              data-testid="input-pidaka-content"
-            />
-            <div className="flex items-center justify-end">
-              <Button
-                onClick={handlePost}
-                disabled={!newContent.trim() || createPidaka.isPending}
-                data-testid="button-post-pidaka"
-              >
-                <Send className="h-4 w-4 mr-1.5" />
-                {createPidaka.isPending ? "Pasting..." : "Paste Pidaka"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {isLoading ? (
+        {isLoading && !pidakas ? (
           <div className="flex flex-col gap-3">
             {[1, 2, 3].map((i) => (
               <Card key={i}>
                 <CardContent className="pt-4 pb-4 flex flex-col gap-3">
-                  <div className="flex items-start gap-3">
-                    <Skeleton className="h-8 w-8 rounded-md shrink-0" />
-                    <div className="flex flex-col gap-2 flex-1">
-                      <Skeleton className="h-4 w-full" />
-                      <Skeleton className="h-4 w-3/4" />
-                    </div>
-                  </div>
-                  <Skeleton className="h-3 w-1/4" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-2 w-full" />
                 </CardContent>
               </Card>
             ))}
           </div>
-        ) : pidakas && pidakas.length > 0 ? (
+        ) : isError && !pidakas ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <p className="font-serif text-xl">The wall is dark tonight</p>
+            <p className="text-sm text-muted-foreground">Could not reach the room. Stay. Try again.</p>
+          </div>
+        ) : displayPidakas && displayPidakas.length > 0 ? (
           <div className="flex flex-col gap-3">
-            {pidakas.map((pidaka) => (
-              <Card key={pidaka.id} className="hover-elevate overflow-visible transition-all duration-200" data-testid={`card-pidaka-${pidaka.id}`}>
-                <CardContent className="pt-4 pb-4 flex flex-col gap-3">
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" data-testid={`text-content-${pidaka.id}`}>
-                    {pidaka.content}
-                  </p>
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid={`text-time-${pidaka.id}`}>
-                      <Clock className="h-3 w-3" />
-                      <span>{formatDistanceToNow(new Date(pidaka.createdAt), { addSuffix: true })}</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleBurnClick(pidaka.id)}
-                      className="text-primary"
-                      data-testid={`button-burn-${pidaka.id}`}
-                    >
-                      <BurningCookieIcon className="h-3.5 w-3.5 mr-1" />
-                      Burn
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            <AnimatePresence initial={false}>
+              {displayPidakas.map((pidaka, index) => {
+                const arrived = arrivingIds.has(pidaka.id);
+                return (
+                  <motion.div
+                    key={pidaka.id}
+                    layout
+                    initial={arrived ? { opacity: 0, y: -22 } : { opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{
+                      duration: 0.45,
+                      delay: arrived ? 0 : Math.min(index * 0.04, 0.28),
+                      ease: [0.16, 1, 0.3, 1],
+                    }}
+                  >
+                    <PidakaCard
+                      pidaka={pidaka}
+                      onBurn={handleBurnClick}
+                      arrived={arrived}
+                      onSeen={handleSeen}
+                    />
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-4 py-16" data-testid="text-empty-wall">
             <div className="relative">
               <div className="absolute -inset-4 rounded-full bg-primary/5 blur-xl" />
-              <BurningCookieIcon className="h-14 w-14 text-muted-foreground/50 relative" />
+            <BurningCookieIcon variant="hero" className="h-16 w-16" />
             </div>
-            <div className="text-center flex flex-col gap-1">
-              <p className="text-sm font-medium text-muted-foreground">The wall is empty</p>
-              <p className="text-xs text-muted-foreground/70">Be the first to paste something</p>
+            <div className="text-center flex flex-col gap-2">
+              <p className="font-serif text-xl">Nobody has spoken tonight.</p>
+              <p className="text-sm text-muted-foreground">The wall is listening. It will not keep your name.</p>
+              {user && (
+                <Button className="mt-2" onClick={() => document.querySelector<HTMLTextAreaElement>("[data-testid=input-pidaka-content]")?.focus()}>
+                  Be the first
+                </Button>
+              )}
             </div>
           </div>
         )}
       </main>
 
-      <Dialog open={burnDialogOpen} onOpenChange={setBurnDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2.5" data-testid="text-burn-dialog-title">
-              <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary/10">
-                <BurningCookieIcon className="h-4 w-4 text-primary" />
-              </div>
-              Send Anonymous Burn
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground" data-testid="text-burn-dialog-description">
-            Your message will be delivered anonymously. The creator won't know who you are.
-          </p>
-          <Textarea
-            placeholder="Write your anonymous message..."
-            value={burnMessage}
-            onChange={(e) => setBurnMessage(e.target.value.slice(0, 500))}
-            className="resize-none min-h-[100px] border-0 bg-muted/50 focus-visible:ring-1 focus-visible:ring-primary/30"
-            data-testid="input-burn-message"
-          />
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setBurnDialogOpen(false)} data-testid="button-cancel-burn">
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSendBurn}
-              disabled={!burnMessage.trim() || sendBurn.isPending}
-              data-testid="button-send-burn"
-            >
-              <BurningCookieIcon className="h-4 w-4 mr-1.5" />
-              {sendBurn.isPending ? "Sending..." : "Send Burn"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BurnRitual
+        pidaka={burnTarget}
+        open={Boolean(burnTarget)}
+        sending={sendBurn.isPending}
+        onClose={() => setBurnTarget(null)}
+        onSend={(message) => {
+          if (!burnTarget) return;
+          sendBurn.mutate({ pidakaId: burnTarget.id, message });
+        }}
+      />
     </div>
   );
 }

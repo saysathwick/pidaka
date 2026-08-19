@@ -1,8 +1,21 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-function getAuthHeaders(): Record<string, string> {
+const VIEWER_KEY = "pidaka_viewer";
+
+export function getViewerId(): string {
+  let id = localStorage.getItem(VIEWER_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(VIEWER_KEY, id);
+  }
+  return id;
+}
+
+function getRequestHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "X-Pidaka-Viewer": getViewerId(),
+  };
   const token = localStorage.getItem("pidaka_token");
-  const headers: Record<string, string> = {};
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -22,7 +35,7 @@ export async function apiRequest(
   data?: unknown | undefined,
 ): Promise<Response> {
   const headers: Record<string, string> = {
-    ...getAuthHeaders(),
+    ...getRequestHeaders(),
   };
   if (data) {
     headers["Content-Type"] = "application/json";
@@ -47,7 +60,7 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
-      headers: getAuthHeaders(),
+      headers: getRequestHeaders(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
@@ -64,7 +77,7 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      staleTime: 15_000,
       retry: false,
     },
     mutations: {

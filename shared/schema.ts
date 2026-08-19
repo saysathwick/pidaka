@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -27,8 +27,22 @@ export const burns = pgTable("burns", {
   senderUserId: varchar("sender_user_id").notNull(),
   receiverUserId: varchar("receiver_user_id").notNull(),
   message: text("message").notNull(),
+  pidakaExcerpt: text("pidaka_excerpt").notNull().default(""),
+  readAt: timestamp("read_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const pidakaViews = pgTable(
+  "pidaka_views",
+  {
+    pidakaId: varchar("pidaka_id").notNull(),
+    viewerId: varchar("viewer_id").notNull(),
+    seenAt: timestamp("seen_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.pidakaId, table.viewerId] }),
+  }),
+);
 
 export const registerSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -59,3 +73,4 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Pidaka = typeof pidakas.$inferSelect;
 export type Burn = typeof burns.$inferSelect;
+export type PidakaView = typeof pidakaViews.$inferSelect;

@@ -1,9 +1,12 @@
 import { eq, desc, lt, sql } from "drizzle-orm";
-import { db } from "./db";
+import { db, isDemoMode } from "./db";
+import { DemoStorage } from "./demo-storage";
+import { excerptPidaka } from "@shared/names";
 import {
   users,
   pidakas,
   burns,
+  pidakaViews,
   type User,
   type InsertUser,
   type Pidaka,
@@ -13,6 +16,7 @@ import {
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByAnonymousName(name: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   getUserStats(id: string): Promise<{ burnsSentCount: number; burnsReceivedCount: number }>;
 
@@ -23,6 +27,11 @@ export interface IStorage {
 
   createBurn(pidakaId: string, senderUserId: string, receiverUserId: string, message: string): Promise<Burn>;
   getUserBurnsInbox(userId: string): Promise<Burn[]>;
+  countUnreadBurns(userId: string): Promise<number>;
+  markBurnsRead(userId: string): Promise<void>;
+  getSeenIds(viewerId: string): Promise<string[]>;
+  markSeen(pidakaId: string, viewerId: string): Promise<void>;
+  getWitnessCounts(): Promise<Record<string, number>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -38,6 +47,11 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  async getUserByAnonymousName(name: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.anonymousName, name));
     return user;
   }
 
@@ -78,18 +92,10 @@ export class DatabaseStorage implements IStorage {
 
   async deleteExpiredPidakas(): Promise<void> {
     const now = new Date();
-    const expiredPidakaIds = await db
-      .select({ id: pidakas.id })
-      .from(pidakas)
-      .where(lt(pidakas.expiresAt, now));
-
-    if (expiredPidakaIds.length > 0) {
-      const ids = expiredPidakaIds.map((p) => p.id);
-      for (const id of ids) {
-        await db.delete(burns).where(eq(burns.pidakaId, id));
-      }
-      await db.delete(pidakas).where(lt(pidakas.expiresAt, now));
-    }
+    await db.delete(pidakaViews).where(
+      sql`${pidakaViews.pidakaId} in (select ${pidakas.id} from ${pidakas} where ${pidakas.expiresAt} < ${now})`,
+    );
+    await db.delete(pidakas).where(lt(pidakas.expiresAt, now));
   }
 
   async createBurn(
@@ -98,9 +104,12 @@ export class DatabaseStorage implements IStorage {
     receiverUserId: string,
     message: string
   ): Promise<Burn> {
+    const pidaka = await this.getPidaka(pidakaId);
+    const pidakaExcerpt = excerptPidaka(pidaka?.content ?? "");
+
     const [burn] = await db
       .insert(burns)
-      .values({ pidakaId, senderUserId, receiverUserId, message })
+      .values({ pidakaId, senderUserId, receiverUserId, message, pidakaExcerpt })
       .returning();
 
     await db
@@ -123,6 +132,53 @@ export class DatabaseStorage implements IStorage {
       .where(eq(burns.receiverUserId, userId))
       .orderBy(desc(burns.createdAt));
   }
+
+  async countUnreadBurns(userId: string): Promise<number> {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(burns)
+      .where(sql`${burns.receiverUserId} = ${userId} AND ${burns.readAt} IS NULL`);
+    return Number(row?.count ?? 0);
+  }
+
+  async markBurnsRead(userId: string): Promise<void> {
+    await db
+      .update(burns)
+      .set({ readAt: new Date() })
+      .where(sql`${burns.receiverUserId} = ${userId} AND ${burns.readAt} IS NULL`);
+  }
+
+  async getSeenIds(viewerId: string): Promise<string[]> {
+    const rows = await db
+      .select({ pidakaId: pidakaViews.pidakaId })
+      .from(pidakaViews)
+      .where(eq(pidakaViews.viewerId, viewerId));
+    return rows.map((row) => row.pidakaId);
+  }
+
+  async markSeen(pidakaId: string, viewerId: string): Promise<void> {
+    await db
+      .insert(pidakaViews)
+      .values({ pidakaId, viewerId })
+      .onConflictDoNothing();
+  }
+
+  async getWitnessCounts(): Promise<Record<string, number>> {
+    const rows = await db
+      .select({
+        pidakaId: pidakaViews.pidakaId,
+        count: sql<number>`count(*)`,
+      })
+      .from(pidakaViews)
+      .groupBy(pidakaViews.pidakaId);
+    const counts: Record<string, number> = {};
+    for (const row of rows) {
+      counts[row.pidakaId] = Number(row.count);
+    }
+    return counts;
+  }
 }
 
-export const storage = new DatabaseStorage();
+export const storage: IStorage = isDemoMode
+  ? new DemoStorage()
+  : new DatabaseStorage();

@@ -1,40 +1,84 @@
-import { Switch, Route } from "wouter";
+import { useEffect, useState } from "react";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { AuthModalProvider, useAuthModal } from "@/lib/auth-modal";
 import { ThemeProvider } from "@/lib/theme";
-import AuthPage from "@/pages/auth";
+import { AuthDialog } from "@/pages/auth";
 import WallPage from "@/pages/wall";
 import InboxPage from "@/pages/inbox";
 import NotFound from "@/pages/not-found";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CinematicIntro, shouldPlayIntro } from "@/components/cinematic-intro";
+import { NameReveal } from "@/components/name-reveal";
+import { BurningCookieIcon } from "@/components/burning-cookie-icon";
+import { AnimatePresence, motion } from "framer-motion";
+
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  const { showAuth } = useAuthModal();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && !user) {
+      showAuth();
+      navigate("/");
+    }
+  }, [isLoading, user, showAuth, navigate]);
+
+  if (!user) return <WallPage />;
+  return <>{children}</>;
+}
 
 function AppContent() {
-  const { user, isLoading } = useAuth();
+  const { isLoading, justNamed, clearJustNamed } = useAuth();
+  const [location] = useLocation();
+  const [introDone, setIntroDone] = useState(() => !shouldPlayIntro());
+
+  if (!introDone) {
+    return <CinematicIntro onComplete={() => setIntroDone(true)} />;
+  }
+
+  if (justNamed) {
+    return <NameReveal name={justNamed} onComplete={clearJustNamed} />;
+  }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <Skeleton className="h-8 w-32" />
-          <Skeleton className="h-4 w-48" />
+      <div className="min-h-screen flex items-center justify-center bg-background wall-atmosphere">
+        <div className="relative">
+          <div className="absolute -inset-6 rounded-full bg-primary/20 blur-2xl ember-breathe" />
+          <BurningCookieIcon variant="hero" isLit className="h-20 w-20 relative" />
         </div>
       </div>
     );
   }
 
-  if (!user) {
-    return <AuthPage />;
-  }
-
   return (
-    <Switch>
-      <Route path="/" component={WallPage} />
-      <Route path="/inbox" component={InboxPage} />
-      <Route component={NotFound} />
-    </Switch>
+    <>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={location}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.22 }}
+        >
+          <Switch>
+            <Route path="/" component={WallPage} />
+            <Route path="/inbox">
+              <RequireAuth>
+                <InboxPage />
+              </RequireAuth>
+            </Route>
+            <Route component={NotFound} />
+          </Switch>
+        </motion.div>
+      </AnimatePresence>
+      <AuthDialog />
+    </>
   );
 }
 
@@ -44,8 +88,11 @@ function App() {
       <TooltipProvider>
         <ThemeProvider>
           <AuthProvider>
-            <AppContent />
-            <Toaster />
+            <AuthModalProvider>
+              <div className="pointer-events-none fixed inset-0 z-[80] film-grain opacity-[0.07] mix-blend-overlay" />
+              <AppContent />
+              <Toaster />
+            </AuthModalProvider>
           </AuthProvider>
         </ThemeProvider>
       </TooltipProvider>

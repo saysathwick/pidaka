@@ -1,10 +1,12 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import { queueForViewer } from "@pidaka/doorstep";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import cron from "node-cron";
 import { registerSchema, loginSchema, insertPidakaSchema, insertBurnSchema } from "@shared/schema";
+import { generateAnonymousName } from "@shared/names";
 import { log } from "./index";
 
 if (!process.env.SESSION_SECRET) {
@@ -12,17 +14,39 @@ if (!process.env.SESSION_SECRET) {
 }
 const JWT_SECRET = process.env.SESSION_SECRET;
 
-function generateAnonymousName(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  let suffix = "";
-  for (let i = 0; i < 6; i++) {
-    suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+async function uniqueAnonymousName(): Promise<string> {
+  for (let i = 0; i < 12; i++) {
+    const name = generateAnonymousName();
+    const taken = await storage.getUserByAnonymousName(name);
+    if (!taken) return name;
   }
-  return `pidaka_${suffix}`;
+  return `${generateAnonymousName()} ${Date.now().toString(36).slice(-3)}`;
+}
+
+async function publicUser(userId: string, fallback: {
+  anonymousName: string;
+  burnsSentCount: number;
+  burnsReceivedCount: number;
+}) {
+  const unreadCount = await storage.countUnreadBurns(userId);
+  return { ...fallback, unreadCount };
 }
 
 interface AuthRequest extends Request {
   userId?: string;
+}
+
+function viewerIdFrom(req: AuthRequest): string | undefined {
+  if (req.userId) return req.userId;
+  const header = req.headers["x-pidaka-viewer"];
+  const raw = Array.isArray(header) ? header[0] : header;
+  if (raw && /^[a-zA-Z0-9_-]{8,64}$/.test(raw)) return raw;
+  return undefined;
+}
+
+function pidakaParam(req: Request): string | undefined {
+  const value = req.params.pidakaId ?? req.params.id;
+  return Array.isArray(value) ? value[0] : value;
 }
 
 function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
@@ -38,6 +62,20 @@ function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   } catch {
     return res.status(401).json({ message: "Invalid or expired token" });
   }
+}
+
+function optionalAuth(req: AuthRequest, _res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    try {
+      const token = authHeader.split(" ")[1];
+      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+      req.userId = decoded.userId;
+    } catch {
+      // Public read still works with a stale token.
+    }
+  }
+  next();
 }
 
 export async function registerRoutes(
@@ -59,7 +97,7 @@ export async function registerRoutes(
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
-      const anonymousName = generateAnonymousName();
+      const anonymousName = await uniqueAnonymousName();
 
       const user = await storage.createUser({
         email,
@@ -71,11 +109,11 @@ export async function registerRoutes(
 
       return res.status(201).json({
         token,
-        user: {
+        user: await publicUser(user.id, {
           anonymousName: user.anonymousName,
           burnsSentCount: user.burnsSentCount,
           burnsReceivedCount: user.burnsReceivedCount,
-        },
+        }),
       });
     } catch (err: any) {
       return res.status(500).json({ message: "Registration failed" });
@@ -104,11 +142,11 @@ export async function registerRoutes(
 
       return res.json({
         token,
-        user: {
+        user: await publicUser(user.id, {
           anonymousName: user.anonymousName,
           burnsSentCount: user.burnsSentCount,
           burnsReceivedCount: user.burnsReceivedCount,
-        },
+        }),
       });
     } catch (err: any) {
       return res.status(500).json({ message: "Login failed" });
@@ -121,28 +159,70 @@ export async function registerRoutes(
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      return res.json({
+      return res.json(await publicUser(user.id, {
         anonymousName: user.anonymousName,
         burnsSentCount: user.burnsSentCount,
         burnsReceivedCount: user.burnsReceivedCount,
-      });
+      }));
     } catch {
       return res.status(500).json({ message: "Failed to get user" });
     }
   });
 
-  app.get("/api/pidakas", authMiddleware as any, async (_req: AuthRequest, res: Response) => {
+  app.get("/api/pidakas", optionalAuth as any, async (req: AuthRequest, res: Response) => {
     try {
+      const viewerId = viewerIdFrom(req);
       const activePidakas = await storage.getActivePidakas();
-      const safePidakas = activePidakas.map((p) => ({
+      const seenIds = viewerId ? await storage.getSeenIds(viewerId) : [];
+      const seenSet = new Set(seenIds);
+      const witnessCounts = await storage.getWitnessCounts();
+      const queued = queueForViewer({
+        items: activePidakas.map((p) => ({
+          ...p,
+          creatorId: p.creatorUserId,
+        })),
+        viewerId: viewerId ?? "__anon__",
+        seenIds,
+        witnessCounts,
+      });
+      const queuedIds = new Set(queued.map((p) => p.id));
+      const own = viewerId
+        ? activePidakas.filter((p) => p.creatorUserId === viewerId && !queuedIds.has(p.id))
+        : [];
+      const ordered = [...queued, ...own];
+      return res.json(ordered.map((p) => ({
         id: p.id,
         content: p.content,
         createdAt: p.createdAt,
         expiresAt: p.expiresAt,
-      }));
-      return res.json(safePidakas);
+        isOwn: viewerId ? p.creatorUserId === viewerId : false,
+        seen: seenSet.has(p.id),
+      })));
     } catch {
       return res.status(500).json({ message: "Failed to fetch pidakas" });
+    }
+  });
+
+  app.post("/api/pidakas/:id/seen", optionalAuth as any, async (req: AuthRequest, res: Response) => {
+    try {
+      const viewerId = viewerIdFrom(req);
+      if (!viewerId) {
+        return res.status(400).json({ message: "Viewer required" });
+      }
+      const pidakaId = pidakaParam(req);
+      if (!pidakaId) {
+        return res.status(400).json({ message: "Pidaka id is required" });
+      }
+      const pidaka = await storage.getPidaka(pidakaId);
+      if (!pidaka) {
+        return res.status(404).json({ message: "Pidaka not found" });
+      }
+      if (pidaka.creatorUserId !== viewerId) {
+        await storage.markSeen(pidakaId, viewerId);
+      }
+      return res.json({ ok: true });
+    } catch {
+      return res.status(500).json({ message: "Failed to mark seen" });
     }
   });
 
@@ -172,7 +252,12 @@ export async function registerRoutes(
         return res.status(400).json({ message: parsed.error.errors[0].message });
       }
 
-      const pidaka = await storage.getPidaka(req.params.pidakaId);
+      const pidakaId = pidakaParam(req);
+      if (!pidakaId) {
+        return res.status(400).json({ message: "Pidaka id is required" });
+      }
+
+      const pidaka = await storage.getPidaka(pidakaId);
       if (!pidaka) {
         return res.status(404).json({ message: "Pidaka not found" });
       }
@@ -182,11 +267,12 @@ export async function registerRoutes(
       }
 
       const burn = await storage.createBurn(
-        pidaka.id,
+        pidakaId,
         req.userId!,
         pidaka.creatorUserId,
         parsed.data.message
       );
+      await storage.markSeen(pidakaId, req.userId!);
 
       return res.status(201).json({ id: burn.id, createdAt: burn.createdAt });
     } catch {
@@ -201,10 +287,21 @@ export async function registerRoutes(
         id: b.id,
         message: b.message,
         createdAt: b.createdAt,
+        readAt: b.readAt,
+        pidakaExcerpt: b.pidakaExcerpt,
       }));
       return res.json(safeInbox);
     } catch {
       return res.status(500).json({ message: "Failed to fetch inbox" });
+    }
+  });
+
+  app.post("/api/burns/inbox/read", authMiddleware as any, async (req: AuthRequest, res: Response) => {
+    try {
+      await storage.markBurnsRead(req.userId!);
+      return res.json({ ok: true });
+    } catch {
+      return res.status(500).json({ message: "Failed to mark burns read" });
     }
   });
 
