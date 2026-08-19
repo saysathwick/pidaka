@@ -1,0 +1,37 @@
+{
+  "name": "doorstep",
+  "version": "0.2.0",
+  "description": "Complete doorstep distribution: every perishable item is queued for every other person. Unseen first, first-to-expire next. No sampling, no popularity rank.",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "./bindings/node/index.cjs",
+  "types": "./bindings/node/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./bindings/node/index.d.ts",
+      "default": "./bindings/node/index.cjs"
+    }
+  },
+  "files": [
+    "bindings/node/index.cjs",
+    "bindings/node/index.d.ts",
+    "bindings/node/doorstep.wasm",
+    "README.md",
+    "LICENSE",
+    "include/doorstep.h"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/saysathwick/doorstep.git"
+  },
+  "bugs": {
+    "url": "https://github.com/saysathwick/doorstep/issues"
+  },
+  "homepage": "https://github.com/saysathwick/doorstep#readme",
+  "keywords": [
+    "queue",
+    "fair-delivery",
+    "perishable",
+    "wasm"
+  ]
+}
