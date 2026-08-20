@@ -12,11 +12,13 @@ import { PidakaCard, type PidakaItem } from "@/components/pidaka-card";
 import { ComposeFab, ComposeOverlay, PidakaComposer } from "@/components/pidaka-composer";
 import { BurnRitual } from "@/components/burn-ritual";
 import { AnimatePresence, motion } from "framer-motion";
+import { usePublicWall } from "@/lib/wall";
 
 export default function WallPage() {
   const { user, refreshUser } = useAuth();
   const { showAuth } = useAuthModal();
   const { toast } = useToast();
+  const { data: wall } = usePublicWall();
 
   const [newContent, setNewContent] = useState("");
   const [burnTarget, setBurnTarget] = useState<PidakaItem | null>(null);
@@ -116,6 +118,10 @@ export default function WallPage() {
       showAuth();
       return;
     }
+    if (wall && !wall.posting) {
+      toast({ title: "The wall is not taking pastes tonight" });
+      return;
+    }
     if (!newContent.trim()) return;
     createPidaka.mutate(newContent.trim());
   };
@@ -125,12 +131,20 @@ export default function WallPage() {
       showAuth();
       return;
     }
+    if (wall && !wall.posting) {
+      toast({ title: "The wall is not taking pastes tonight" });
+      return;
+    }
     setComposeOpen(true);
   };
 
   const handleBurnClick = (pidakaId: string) => {
     if (!user) {
       showAuth();
+      return;
+    }
+    if (wall && !wall.burning) {
+      toast({ title: "Burns are closed tonight" });
       return;
     }
     const target = pidakas?.find((p) => p.id === pidakaId) ?? null;
@@ -151,8 +165,20 @@ export default function WallPage() {
   return (
     <SiteShell place="wall" fetching={isFetching && !isLoading} paddedFooter>
       <main className="max-w-6xl mx-auto px-4 pt-6 pb-28 sm:pb-12 flex flex-col gap-5">
+        {wall?.notice && (
+          <p className="max-w-2xl mx-auto md:mx-0 text-sm leading-relaxed text-muted-foreground border border-border/70 rounded-xl px-4 py-3">
+            {wall.notice}
+          </p>
+        )}
         <div ref={composerRef} className="max-w-2xl mx-auto md:mx-0 md:max-w-none">
-          {composer}
+          {user && wall && !wall.posting ? (
+            <div className="composer-glass rounded-xl border px-5 py-5">
+              <p className="font-serif text-xl">The wall is not taking pastes tonight.</p>
+              <p className="mt-2 text-sm text-muted-foreground">Reading is still free.</p>
+            </div>
+          ) : (
+            composer
+          )}
         </div>
 
         {isLoading && !pidakas ? (
@@ -223,7 +249,7 @@ export default function WallPage() {
       </main>
 
       <ComposeFab
-        visible={!composerInView && !composeOpen && !burnTarget}
+        visible={!composerInView && !composeOpen && !burnTarget && wall?.posting !== false}
         onClick={openCompose}
       />
       <ComposeOverlay

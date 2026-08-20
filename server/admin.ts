@@ -1,0 +1,49 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+import type { NextFunction, Request, Response } from "express";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.SESSION_SECRET!;
+
+export interface AdminRequest extends Request {
+  hearth?: boolean;
+}
+
+export function adminSecret(): string | null {
+  const fromEnv = process.env.ADMIN_SECRET?.trim();
+  if (fromEnv) return fromEnv;
+  if (process.env.NODE_ENV !== "production") {
+    return `${process.env.SESSION_SECRET}:hearth`;
+  }
+  return null;
+}
+
+export function secretsEqual(provided: string, expected: string) {
+  const a = createHash("sha256").update(provided).digest();
+  const b = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(a, b);
+}
+
+export function signAdminToken() {
+  return jwt.sign({ role: "hearth" }, JWT_SECRET, { expiresIn: "12h" });
+}
+
+export function adminMiddleware(req: AdminRequest, res: Response, next: NextFunction) {
+  if (!adminSecret()) {
+    return res.status(503).json({ message: "The hearth is not keyed yet" });
+  }
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Hearth key required" });
+  }
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { role?: string };
+    if (decoded.role !== "hearth") {
+      return res.status(401).json({ message: "Hearth key required" });
+    }
+    req.hearth = true;
+    next();
+  } catch {
+    return res.status(401).json({ message: "Hearth key expired" });
+  }
+}

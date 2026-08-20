@@ -13,6 +13,10 @@ const statements = [
     burns_received_count integer NOT NULL DEFAULT 0,
     created_at timestamp NOT NULL DEFAULT now()
   )`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider text NOT NULL DEFAULT 'password'`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_subject text NOT NULL DEFAULT ''`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS users_phone_unique ON users (phone)`,
   `CREATE TABLE IF NOT EXISTS pidakas (
     id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
     content text NOT NULL,
@@ -30,11 +34,25 @@ const statements = [
     read_at timestamp,
     created_at timestamp NOT NULL DEFAULT now()
   )`,
+  `ALTER TABLE burns ADD COLUMN IF NOT EXISTS pidaka_excerpt text NOT NULL DEFAULT ''`,
+  `ALTER TABLE burns ADD COLUMN IF NOT EXISTS read_at timestamp`,
   `CREATE TABLE IF NOT EXISTS pidaka_views (
     pidaka_id varchar NOT NULL,
     viewer_id varchar NOT NULL,
     seen_at timestamp NOT NULL DEFAULT now(),
     PRIMARY KEY (pidaka_id, viewer_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS wall_settings (
+    id varchar PRIMARY KEY,
+    google_login boolean NOT NULL DEFAULT false,
+    apple_login boolean NOT NULL DEFAULT false,
+    phone_login boolean NOT NULL DEFAULT true,
+    email_login boolean NOT NULL DEFAULT true,
+    registrations_open boolean NOT NULL DEFAULT true,
+    posting_open boolean NOT NULL DEFAULT true,
+    burning_open boolean NOT NULL DEFAULT true,
+    notice text NOT NULL DEFAULT '',
+    updated_at timestamp NOT NULL DEFAULT now()
   )`,
 ];
 

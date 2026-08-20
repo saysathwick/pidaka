@@ -12,6 +12,8 @@ import {
   insertBurnSchema,
   phoneStartSchema,
   phoneVerifySchema,
+  adminSessionSchema,
+  wallSettingsPatchSchema,
 } from "@shared/schema";
 import {
   appleAuthUrl,
@@ -31,6 +33,9 @@ import {
   signAppToken,
   signOAuthState,
 } from "./identity";
+import { adminMiddleware, adminSecret, secretsEqual, signAdminToken, type AdminRequest } from "./admin";
+import { readPublicWall, readWallSettings, toPublicWall } from "./wall-settings";
+import { settingsHaveADoor } from "@shared/wall";
 import { generateAnonymousName } from "@shared/names";
 import { log } from "./index";
 
@@ -113,8 +118,114 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
+  app.get("/api/wall", async (_req: Request, res: Response) => {
+    try {
+      return res.json(await readPublicWall());
+    } catch (err) {
+      return serverError(res, "Failed to read the wall", err);
+    }
+  });
+
+  app.post("/api/admin/session", async (req: Request, res: Response) => {
+    const expected = adminSecret();
+    if (!expected) {
+      return res.status(503).json({ message: "Set ADMIN_SECRET on this wall first" });
+    }
+    const parsed = adminSessionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0].message });
+    }
+    if (!secretsEqual(parsed.data.secret, expected)) {
+      return res.status(401).json({ message: "That key does not open the hearth" });
+    }
+    return res.json({ token: signAdminToken() });
+  });
+
+  app.get("/api/admin/overview", adminMiddleware as any, async (_req: AdminRequest, res: Response) => {
+    try {
+      const settings = await readWallSettings();
+      return res.json({
+        settings,
+        wall: toPublicWall(settings),
+        stats: await storage.adminStats(),
+      });
+    } catch (err) {
+      return serverError(res, "Failed to read the hearth", err);
+    }
+  });
+
+  app.patch("/api/admin/settings", adminMiddleware as any, async (req: AdminRequest, res: Response) => {
+    try {
+      const parsed = wallSettingsPatchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0].message });
+      }
+      const current = await readWallSettings();
+      const next = {
+        ...current,
+        ...parsed.data,
+        notice: parsed.data.notice !== undefined ? parsed.data.notice.trim() : current.notice,
+      };
+      if (!settingsHaveADoor(next)) {
+        return res.status(400).json({ message: "Leave at least one way in" });
+      }
+      const settings = await storage.saveWallSettings(next);
+      return res.json({
+        settings,
+        wall: toPublicWall(settings),
+      });
+    } catch (err) {
+      return serverError(res, "Failed to save the hearth", err);
+    }
+  });
+
+  app.get("/api/admin/pidakas", adminMiddleware as any, async (_req: AdminRequest, res: Response) => {
+    try {
+      const rows = await storage.listAdminPidakas();
+      return res.json(rows.map((row) => ({
+        ...row,
+        createdAt: row.createdAt.toISOString(),
+        expiresAt: row.expiresAt.toISOString(),
+      })));
+    } catch (err) {
+      return serverError(res, "Failed to list pidakas", err);
+    }
+  });
+
+  app.delete("/api/admin/pidakas/:id", adminMiddleware as any, async (req: AdminRequest, res: Response) => {
+    try {
+      const id = pidakaParam(req);
+      if (!id) return res.status(400).json({ message: "Pidaka id is required" });
+      const removed = await storage.deletePidaka(id);
+      if (!removed) return res.status(404).json({ message: "Pidaka not found" });
+      return res.json({ ok: true });
+    } catch (err) {
+      return serverError(res, "Failed to take down that pidaka", err);
+    }
+  });
+
+  app.get("/api/admin/users", adminMiddleware as any, async (_req: AdminRequest, res: Response) => {
+    try {
+      const rows = await storage.listAdminUsers();
+      return res.json(rows.map((row) => ({
+        ...row,
+        createdAt: row.createdAt.toISOString(),
+      })));
+    } catch (err) {
+      return serverError(res, "Failed to list names", err);
+    }
+  });
+
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
+      const wall = await readPublicWall();
+      if (!wall.email) {
+        return res.status(403).json({ message: "Email is closed on this wall" });
+      }
+      if (!wall.registrations) {
+        return res.status(403).json({ message: "The wall is not taking names tonight" });
+      }
+
       const parsed = registerSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0].message });
@@ -155,6 +266,11 @@ export async function registerRoutes(
 
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
+      const wall = await readPublicWall();
+      if (!wall.email) {
+        return res.status(403).json({ message: "Email is closed on this wall" });
+      }
+
       const parsed = loginSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0].message });
@@ -195,6 +311,10 @@ export async function registerRoutes(
 
   app.get("/api/auth/google", async (req: Request, res: Response) => {
     const origin = publicOrigin(req);
+    const wall = await readPublicWall();
+    if (!wall.google) {
+      return res.redirect(`${origin}/?authError=google`);
+    }
     if (googleConfigured()) {
       return res.redirect(googleAuthUrl(origin, signOAuthState("google")));
     }
@@ -202,10 +322,12 @@ export async function registerRoutes(
       return res.redirect(`${origin}/?authError=google`);
     }
     try {
+      const settings = await readWallSettings();
       const { user, created } = await findOrCreateAuthUser({
         provider: "google",
         subject: "demo-google",
         email: "demo.google@users.pidaka",
+        allowCreate: settings.registrationsOpen,
       });
       return finishRedirect(res, origin, signAppToken(user.id), created);
     } catch {
@@ -221,11 +343,13 @@ export async function registerRoutes(
       if (!code || readOAuthState(state) !== "google") {
         return res.redirect(`${origin}/?authError=google`);
       }
+      const settings = await readWallSettings();
       const profile = await googleProfile(origin, code);
       const { user, created } = await findOrCreateAuthUser({
         provider: "google",
         subject: profile.subject,
         email: profile.email,
+        allowCreate: settings.registrationsOpen,
       });
       return finishRedirect(res, origin, signAppToken(user.id), created);
     } catch {
@@ -235,6 +359,10 @@ export async function registerRoutes(
 
   app.get("/api/auth/apple", async (req: Request, res: Response) => {
     const origin = publicOrigin(req);
+    const wall = await readPublicWall();
+    if (!wall.apple) {
+      return res.redirect(`${origin}/?authError=apple`);
+    }
     if (appleConfigured()) {
       return res.redirect(appleAuthUrl(origin, signOAuthState("apple")));
     }
@@ -242,10 +370,12 @@ export async function registerRoutes(
       return res.redirect(`${origin}/?authError=apple`);
     }
     try {
+      const settings = await readWallSettings();
       const { user, created } = await findOrCreateAuthUser({
         provider: "apple",
         subject: "demo-apple",
         email: "demo.apple@users.pidaka",
+        allowCreate: settings.registrationsOpen,
       });
       return finishRedirect(res, origin, signAppToken(user.id), created);
     } catch {
@@ -261,11 +391,13 @@ export async function registerRoutes(
       if (!code || readOAuthState(state) !== "apple") {
         return res.redirect(`${origin}/?authError=apple`);
       }
+      const settings = await readWallSettings();
       const profile = await appleProfile(origin, code);
       const { user, created } = await findOrCreateAuthUser({
         provider: "apple",
         subject: profile.subject,
         email: profile.email,
+        allowCreate: settings.registrationsOpen,
       });
       return finishRedirect(res, origin, signAppToken(user.id), created);
     } catch {
@@ -275,6 +407,10 @@ export async function registerRoutes(
 
   app.post("/api/auth/phone/start", async (req: Request, res: Response) => {
     try {
+      const wall = await readPublicWall();
+      if (!wall.phone) {
+        return res.status(403).json({ message: "Phone is closed on this wall" });
+      }
       const parsed = phoneStartSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0].message });
@@ -296,6 +432,10 @@ export async function registerRoutes(
 
   app.post("/api/auth/phone/verify", async (req: Request, res: Response) => {
     try {
+      const wall = await readPublicWall();
+      if (!wall.phone) {
+        return res.status(403).json({ message: "Phone is closed on this wall" });
+      }
       const parsed = phoneVerifySchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0].message });
@@ -307,10 +447,12 @@ export async function registerRoutes(
       if (!consumePhoneCode(phone, parsed.data.code)) {
         return res.status(401).json({ message: "That code is wrong or has expired" });
       }
+      const settings = await readWallSettings();
       const { user, created } = await findOrCreateAuthUser({
         provider: "phone",
         subject: phone,
         phone,
+        allowCreate: settings.registrationsOpen,
       });
       return res.json({
         token: signAppToken(user.id),
@@ -321,7 +463,11 @@ export async function registerRoutes(
           burnsReceivedCount: user.burnsReceivedCount,
         }),
       });
-    } catch {
+    } catch (err: any) {
+      const message = err?.message || "Phone sign-in failed";
+      if (typeof message === "string" && message.includes("taking names")) {
+        return res.status(403).json({ message });
+      }
       return res.status(500).json({ message: "Phone sign-in failed" });
     }
   });
@@ -402,6 +548,10 @@ export async function registerRoutes(
 
   app.post("/api/pidakas", authMiddleware as any, async (req: AuthRequest, res: Response) => {
     try {
+      const wall = await readPublicWall();
+      if (!wall.posting) {
+        return res.status(403).json({ message: "The wall is not taking pastes tonight" });
+      }
       const parsed = insertPidakaSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0].message });
@@ -421,6 +571,10 @@ export async function registerRoutes(
 
   app.post("/api/burn/:pidakaId", authMiddleware as any, async (req: AuthRequest, res: Response) => {
     try {
+      const wall = await readPublicWall();
+      if (!wall.burning) {
+        return res.status(403).json({ message: "Burns are closed tonight" });
+      }
       const parsed = insertBurnSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: parsed.error.errors[0].message });
