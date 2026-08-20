@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { isDemoMode } from "./db";
 import { generateAnonymousName } from "@shared/names";
 import type { User } from "@shared/schema";
+import { deliverPhoneCode, smsConfigured, SmsError } from "./sms";
 
 const JWT_SECRET = process.env.SESSION_SECRET!;
 
@@ -87,11 +88,12 @@ export async function findOrCreateAuthUser(input: {
 }
 
 export function normalizePhone(raw: string): string | null {
-  const trimmed = raw.trim();
-  const hasPlus = trimmed.startsWith("+");
-  const digits = trimmed.replace(/\D/g, "");
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 10) return `+91${digits}`;
+  if (digits.length === 11 && digits.startsWith("0")) return `+91${digits.slice(1)}`;
+  if (digits.length === 12 && digits.startsWith("91")) return `+${digits}`;
   if (digits.length < 10 || digits.length > 15) return null;
-  return hasPlus ? `+${digits}` : `+${digits}`;
+  return `+${digits}`;
 }
 
 export function issuePhoneCode(phone: string) {
@@ -113,31 +115,15 @@ export function consumePhoneCode(phone: string, code: string) {
 }
 
 export async function sendPhoneCode(phone: string, code: string) {
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_FROM;
-  if (!sid || !token || !from) {
-    console.log(`[auth] Phone code for ${phone}: ${code}`);
-    return { delivered: false as const };
+  if (smsConfigured()) {
+    await deliverPhoneCode(phone, code);
+    return { delivered: true as const };
   }
-  const body = new URLSearchParams({
-    To: phone,
-    From: from,
-    Body: `Pidaka code: ${code}`,
-  });
-  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString("base64")}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body,
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Could not send the code");
+  if (process.env.NODE_ENV === "production") {
+    throw new SmsError("Phone is not wired on this wall", 503);
   }
-  return { delivered: true as const };
+  console.log(`[auth] Phone code for ${phone}: ${code}`);
+  return { delivered: false as const };
 }
 
 export function googleConfigured() {

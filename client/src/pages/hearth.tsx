@@ -226,6 +226,7 @@ export default function HearthPage() {
               <Door
                 label="Phone"
                 checked={overview.settings.phoneLogin}
+                ready={overview.wall.phoneReady}
                 disabled={busy === "settings"}
                 onCheckedChange={(phoneLogin) => void patch({ phoneLogin })}
               />

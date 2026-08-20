@@ -36,6 +36,7 @@ import {
 import { adminMiddleware, adminSecret, secretsEqual, signAdminToken, type AdminRequest } from "./admin";
 import { readPublicWall, readWallSettings, toPublicWall } from "./wall-settings";
 import { settingsHaveADoor } from "@shared/wall";
+import { assertOtpRate, OtpRateError, SmsError } from "./sms";
 import { generateAnonymousName } from "@shared/names";
 import { log } from "./index";
 
@@ -419,6 +420,14 @@ export async function registerRoutes(
       if (!phone) {
         return res.status(400).json({ message: "Enter a valid phone number" });
       }
+      try {
+        assertOtpRate(phone);
+      } catch (err) {
+        if (err instanceof OtpRateError) {
+          return res.status(429).json({ message: err.message });
+        }
+        throw err;
+      }
       const code = issuePhoneCode(phone);
       const sent = await sendPhoneCode(phone, code);
       return res.json({
@@ -426,6 +435,9 @@ export async function registerRoutes(
         demoCode: sent.delivered ? undefined : code,
       });
     } catch (err: any) {
+      if (err instanceof SmsError) {
+        return res.status(err.status).json({ message: err.message });
+      }
       return res.status(500).json({ message: err.message || "Could not send the code" });
     }
   });

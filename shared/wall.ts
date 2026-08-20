@@ -20,6 +20,7 @@ export type PublicWall = {
   notice: string;
   googleReady: boolean;
   appleReady: boolean;
+  phoneReady: boolean;
 };
 
 export type AdminPidaka = {

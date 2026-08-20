@@ -104,8 +104,7 @@ export function AuthForm() {
     }
   };
 
-  const startPhone = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const requestPhoneCode = async () => {
     setFormError(null);
     setLoading("phone");
     try {
@@ -126,6 +125,11 @@ export function AuthForm() {
     } finally {
       setLoading(null);
     }
+  };
+
+  const startPhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await requestPhoneCode();
   };
 
   const verifyPhone = async (value: string) => {
@@ -205,7 +209,7 @@ export function AuthForm() {
               Continue with Apple
             </Button>
           )}
-          {(!wall || wall.phone) && (
+          {wall?.phone && (
             <Button
               type="button"
               variant="outline"
@@ -385,6 +389,15 @@ export function AuthForm() {
             </InputOTP>
           </div>
           <p className="text-xs text-muted-foreground text-center">Sent to {phone}</p>
+          <button
+            type="button"
+            className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
+            disabled={loading === "phone"}
+            onClick={() => void requestPhoneCode()}
+            data-testid="button-resend-code"
+          >
+            Send again
+          </button>
         </form>
       )}
 
