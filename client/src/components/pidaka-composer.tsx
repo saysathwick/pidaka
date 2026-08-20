@@ -6,6 +6,7 @@ import { Send } from "lucide-react";
 import { BurningCookieIcon } from "@/components/burning-cookie-icon";
 import { cn } from "@/lib/utils";
 import { TEXT_LIMIT, useLimitedText } from "@/hooks/use-limited-text";
+import { useVisualViewport } from "@/hooks/use-visual-viewport";
 
 export const COMPOSER_PROMPTS = [
   "Say it to the wall.",
@@ -24,6 +25,7 @@ interface PidakaComposerProps {
   onGuestClick: () => void;
   autoFocus?: boolean;
   testId?: string;
+  compact?: boolean;
 }
 
 export function PidakaComposer({
@@ -35,6 +37,7 @@ export function PidakaComposer({
   onGuestClick,
   autoFocus,
   testId = "input-pidaka-content",
+  compact = false,
 }: PidakaComposerProps) {
   const [promptIndex, setPromptIndex] = useState(0);
   const [modKey, setModKey] = useState("Ctrl");
@@ -88,7 +91,10 @@ export function PidakaComposer({
             if (value.trim() && !pending) onSubmit();
           }
         }}
-        className="resize-none text-sm min-h-[120px] border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+        className={cn(
+          "resize-none text-sm border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0",
+          compact ? "min-h-[72px] max-h-[22vh]" : "min-h-[120px]",
+        )}
         autoFocus={autoFocus}
         aria-describedby={atLimit ? `${testId}-limit` : undefined}
         data-testid={testId}
@@ -192,20 +198,28 @@ export function ComposeOverlay({
   onSubmit: () => void;
   onClose: () => void;
 }) {
+  const viewport = useVisualViewport(open);
+
   useEffect(() => {
     if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [open, onClose]);
 
   return (
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center p-0 sm:p-4"
+          className="fixed left-0 z-[70] flex w-full items-end justify-center sm:items-center"
+          style={{ top: viewport.top, height: viewport.height }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -220,7 +234,7 @@ export function ComposeOverlay({
           <motion.div
             role="dialog"
             aria-label="Say it to the wall"
-            className="relative z-10 w-full max-w-2xl px-4 pb-[max(0px,env(safe-area-inset-bottom))]"
+            className="relative z-10 w-full max-w-2xl max-h-full overflow-y-auto px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
             initial={{ y: 28, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 16, opacity: 0 }}
@@ -235,6 +249,7 @@ export function ComposeOverlay({
               onSubmit={onSubmit}
               onGuestClick={() => undefined}
               autoFocus
+              compact
               testId="input-pidaka-content-overlay"
             />
           </motion.div>

@@ -20,7 +20,7 @@ interface AuthContextType {
   justNamed: string | null;
   authError: string | null;
   completeSession: (data: SessionPayload) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   clearJustNamed: () => void;
   clearAuthError: () => void;
@@ -101,12 +101,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     applyUser({ ...data.user, unreadCount: data.user.unreadCount ?? 0 }, data.created);
   };
 
-  const logout = () => {
+  const logout = async () => {
     localStorage.removeItem("pidaka_token");
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    } catch {
+      // still leave
+    }
     setToken(null);
     setUser(null);
     setJustNamed(null);
-    void fetch("/api/auth/logout", { method: "POST", credentials: "include" });
   };
 
   const clearJustNamed = useCallback(() => setJustNamed(null), []);

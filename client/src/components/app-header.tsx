@@ -7,6 +7,14 @@ import { useAuthModal } from "@/lib/auth-modal";
 import { useTheme } from "@/lib/theme";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { BurningCookieIcon } from "@/components/burning-cookie-icon";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +66,8 @@ export function AppHeader({
   const [location, navigate] = useLocation();
   const unread = user?.unreadCount ?? 0;
   const [busy, setBusy] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   const aboutOpen =
     location === "/about" || location === "/privacy" || location === "/terms" || location === "/contact";
@@ -145,7 +155,7 @@ export function AppHeader({
               >
                 {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </IconAction>
-              <IconAction label="Leave" onClick={logout} testId="button-logout">
+              <IconAction label="Leave" onClick={() => setLeaveOpen(true)} testId="button-logout">
                 <LogOut className="h-4 w-4" />
               </IconAction>
             </>
@@ -172,6 +182,45 @@ export function AppHeader({
           )}
         </div>
       </div>
+      <AlertDialog
+        open={leaveOpen}
+        onOpenChange={(open) => {
+          if (leaving) return;
+          setLeaveOpen(open);
+        }}
+      >
+        <AlertDialogContent className="!fixed left-1/2 top-[42%] z-[90] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border-border sm:top-1/2">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-serif text-2xl font-normal">Leave the wall?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your name stays. You will have to sign in again to paste or burn.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button
+              variant="ghost"
+              disabled={leaving}
+              onClick={() => setLeaveOpen(false)}
+              data-testid="button-leave-cancel"
+            >
+              Stay
+            </Button>
+            <Button
+              disabled={leaving}
+              onClick={async () => {
+                setLeaving(true);
+                await logout();
+                setLeaving(false);
+                setLeaveOpen(false);
+                if (location === "/inbox") navigate("/");
+              }}
+              data-testid="button-leave-confirm"
+            >
+              {leaving ? "Leaving..." : "Leave"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="h-px w-full overflow-hidden" aria-hidden>
         <div
           className={cn(
