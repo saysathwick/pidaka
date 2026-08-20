@@ -47,6 +47,7 @@ import {
   setHearthCookie,
   setSessionCookie,
 } from "./http-security";
+import { mailDomainLooksReal } from "./mail-domain";
 
 if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET environment variable must be set");
@@ -253,6 +254,10 @@ export async function registerRoutes(
       }
 
       const email = parsed.data.email.toLowerCase();
+      const domain = email.slice(email.lastIndexOf("@") + 1);
+      if (!(await mailDomainLooksReal(domain))) {
+        return res.status(400).json({ message: "Enter a real email address" });
+      }
       const { password } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {

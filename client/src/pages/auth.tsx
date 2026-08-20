@@ -19,6 +19,7 @@ import { CowDungCake } from "@/components/burning-cookie-icon";
 import { ArrowLeft, Mail } from "lucide-react";
 import { Link } from "wouter";
 import { usePublicWall } from "@/lib/wall";
+import { isPlausibleEmail } from "@shared/schema";
 
 function formMessage(err: unknown, fallback: string) {
   const raw = err instanceof Error ? err.message : fallback;
@@ -82,6 +83,13 @@ export function AuthForm() {
     e.preventDefault();
     setFormError(null);
     setLoading("email");
+    if (!isPlausibleEmail(email)) {
+      const message = "Enter a real email address";
+      setFormError(message);
+      toast({ title: "That email is not valid", description: message, variant: "destructive" });
+      setLoading(null);
+      return;
+    }
     try {
       const path = emailMode === "register" ? "/api/auth/register" : "/api/auth/login";
       const res = await apiRequest("POST", path, { email, password });
@@ -279,7 +287,7 @@ export function AuthForm() {
               id="email"
               type="email"
               autoComplete="email"
-              placeholder="you@example.com"
+              placeholder="you@gmail.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required

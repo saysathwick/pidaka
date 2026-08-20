@@ -5,9 +5,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { CowDungCake } from "@/components/burning-cookie-icon";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { useTheme } from "@/lib/theme";
+import { Moon, Sun } from "lucide-react";
 import {
   clearHearthToken,
   hearthRequest,
@@ -29,6 +39,7 @@ function excerpt(text: string, max = 140) {
 export default function HearthPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { theme, toggleTheme, accentName, cycleAccent } = useTheme();
   const [secret, setSecret] = useState("");
   const [open, setOpen] = useState(false);
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -37,6 +48,8 @@ export default function HearthPage() {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -134,13 +147,20 @@ export default function HearthPage() {
     }
   };
 
-  const leave = () => {
+  const leave = async () => {
+    setLeaving(true);
     clearHearthToken();
+    try {
+      await fetch("/api/admin/logout", { method: "POST", credentials: "include" });
+    } catch {
+      // still leave
+    }
     setOpen(false);
     setOverview(null);
     setPidakas([]);
     setUsers([]);
-    void fetch("/api/admin/logout", { method: "POST", credentials: "include" });
+    setLeaving(false);
+    setLeaveOpen(false);
   };
 
   return (
@@ -151,13 +171,71 @@ export default function HearthPage() {
             <p className="font-serif text-lg tracking-[0.18em] uppercase">Pidaka</p>
             <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Hearth</p>
           </button>
-          {open && (
-            <Button variant="ghost" size="sm" onClick={leave} data-testid="button-hearth-leave">
-              Leave
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={cycleAccent}
+              aria-label={`${accentName}. Next accent`}
+              title={`${accentName}. Next accent`}
+              data-testid="button-hearth-accent"
+            >
+              <span className="h-3.5 w-3.5 rounded-full bg-primary ring-1 ring-primary/40" />
             </Button>
-          )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              aria-label={theme === "dark" ? "Light hearth" : "Dark hearth"}
+              title={theme === "dark" ? "Light hearth" : "Dark hearth"}
+              data-testid="button-hearth-theme"
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+            {open && (
+              <Button variant="ghost" size="sm" onClick={() => setLeaveOpen(true)} data-testid="button-hearth-leave">
+                Leave
+              </Button>
+            )}
+          </div>
         </div>
       </header>
+
+      <AlertDialog
+        open={leaveOpen}
+        onOpenChange={(next) => {
+          if (leaving) return;
+          setLeaveOpen(next);
+        }}
+      >
+        <AlertDialogContent className="!fixed left-1/2 top-[42%] z-[90] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border-border sm:top-1/2">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-serif text-2xl font-normal">Leave the hearth?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The fire stays. You will need the key to come back in.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button
+              variant="ghost"
+              disabled={leaving}
+              onClick={() => setLeaveOpen(false)}
+              data-testid="button-hearth-leave-cancel"
+            >
+              Stay
+            </Button>
+            <Button
+              disabled={leaving}
+              onClick={() => void leave()}
+              data-testid="button-hearth-leave-confirm"
+            >
+              {leaving ? "Leaving..." : "Leave"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10">
         {!open && !loading && (

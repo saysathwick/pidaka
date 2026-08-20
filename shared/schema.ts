@@ -62,13 +62,39 @@ export const wallSettings = pgTable("wall_settings", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export function isPlausibleEmail(value: string): boolean {
+  const email = value.trim().toLowerCase();
+  if (email.length < 6 || email.length > 254) return false;
+  const at = email.lastIndexOf("@");
+  if (at <= 0 || at !== email.indexOf("@")) return false;
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  if (!local || local.length > 64 || local.startsWith(".") || local.endsWith(".") || local.includes("..")) {
+    return false;
+  }
+  if (!/^[a-z0-9._%+-]+$/i.test(local)) return false;
+  const labels = domain.split(".");
+  if (labels.length < 2) return false;
+  const tld = labels[labels.length - 1];
+  if (!/^[a-z]{2,24}$/i.test(tld)) return false;
+  return labels.every((label) =>
+    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label),
+  );
+}
+
+export const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .refine(isPlausibleEmail, { message: "Enter a real email address" });
+
 export const registerSchema = z.object({
-  email: z.string().email("Invalid email address"),
+  email: emailSchema,
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 export const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
+  email: emailSchema,
   password: z.string().min(1, "Password is required"),
 });
 
