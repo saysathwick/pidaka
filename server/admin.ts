@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import { readHearthToken } from "./http-security";
 
 const JWT_SECRET = process.env.SESSION_SECRET!;
 
@@ -24,20 +25,19 @@ export function secretsEqual(provided: string, expected: string) {
 }
 
 export function signAdminToken() {
-  return jwt.sign({ role: "hearth" }, JWT_SECRET, { expiresIn: "12h" });
+  return jwt.sign({ role: "hearth" }, JWT_SECRET, { expiresIn: "12h", algorithm: "HS256" });
 }
 
 export function adminMiddleware(req: AdminRequest, res: Response, next: NextFunction) {
   if (!adminSecret()) {
     return res.status(503).json({ message: "The hearth is not keyed yet" });
   }
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  const token = readHearthToken(req);
+  if (!token) {
     return res.status(401).json({ message: "Hearth key required" });
   }
   try {
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as { role?: string };
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as { role?: string };
     if (decoded.role !== "hearth") {
       return res.status(401).json({ message: "Hearth key required" });
     }

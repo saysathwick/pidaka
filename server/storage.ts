@@ -1,4 +1,4 @@
-import { eq, desc, lt, sql, and } from "drizzle-orm";
+import { eq, desc, lt, sql, and, inArray } from "drizzle-orm";
 import { db, isDemoMode } from "./db";
 import { DemoStorage } from "./demo-storage";
 import { excerptPidaka } from "@shared/names";
@@ -14,6 +14,8 @@ import {
   type Burn,
 } from "@shared/schema";
 import { WALL_SETTINGS_ID, type WallSettings } from "@shared/wall";
+import { blind, isBlind, seal } from "./crypto";
+import { revealBurn, revealPidaka, revealUser, vaultUserInsert } from "./vault";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -62,17 +64,24 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
+    return user ? revealUser(user) : undefined;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user;
+    const normalized = email.toLowerCase();
+    const hashed = blind(normalized);
+    const [byHash] = await db.select().from(users).where(eq(users.email, hashed));
+    if (byHash) return revealUser(byHash);
+    const [byPlain] = await db.select().from(users).where(eq(users.email, normalized));
+    return byPlain ? revealUser(byPlain) : undefined;
   }
 
   async getUserByPhone(phone: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.phone, phone));
-    return user;
+    const hashed = isBlind(phone) ? phone : blind(phone);
+    const [byHash] = await db.select().from(users).where(eq(users.phone, hashed));
+    if (byHash) return revealUser(byHash);
+    const [byPlain] = await db.select().from(users).where(eq(users.phone, phone));
+    return byPlain ? revealUser(byPlain) : undefined;
   }
 
   async getUserByAuth(provider: string, subject: string): Promise<User | undefined> {
@@ -80,17 +89,18 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(users)
       .where(and(eq(users.authProvider, provider), eq(users.authSubject, subject)));
-    return user;
+    return user ? revealUser(user) : undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
-    return user;
+    const vaulted = vaultUserInsert({ email: insertUser.email, phone: insertUser.phone });
+    const [user] = await db.insert(users).values({ ...insertUser, ...vaulted }).returning();
+    return revealUser(user);
   }
 
   async getUserByAnonymousName(name: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.anonymousName, name));
-    return user;
+    return user ? revealUser(user) : undefined;
   }
 
   async getUserStats(id: string): Promise<{ burnsSentCount: number; burnsReceivedCount: number }> {
@@ -106,20 +116,23 @@ export class DatabaseStorage implements IStorage {
 
   async getActivePidakas(): Promise<Pidaka[]> {
     const now = new Date();
-    return db
+    const rows = await db
       .select()
       .from(pidakas)
       .where(sql`${pidakas.expiresAt} > ${now}`)
-      .orderBy(desc(pidakas.createdAt));
+      .orderBy(desc(pidakas.createdAt))
+      .limit(150);
+    return rows.map(revealPidaka);
   }
 
   async getPidakasByCreator(userId: string): Promise<Pidaka[]> {
     const now = new Date();
-    return db
+    const rows = await db
       .select()
       .from(pidakas)
       .where(and(eq(pidakas.creatorUserId, userId), sql`${pidakas.expiresAt} > ${now}`))
       .orderBy(desc(pidakas.createdAt));
+    return rows.map(revealPidaka);
   }
 
   async createPidaka(content: string, creatorUserId: string): Promise<Pidaka> {
@@ -127,14 +140,14 @@ export class DatabaseStorage implements IStorage {
     const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
     const [pidaka] = await db
       .insert(pidakas)
-      .values({ content, creatorUserId, expiresAt })
+      .values({ content: seal(content), creatorUserId, expiresAt })
       .returning();
-    return pidaka;
+    return revealPidaka(pidaka);
   }
 
   async getPidaka(id: string): Promise<Pidaka | undefined> {
     const [pidaka] = await db.select().from(pidakas).where(eq(pidakas.id, id));
-    return pidaka;
+    return pidaka ? revealPidaka(pidaka) : undefined;
   }
 
   async deleteExpiredPidakas(): Promise<void> {
@@ -156,7 +169,13 @@ export class DatabaseStorage implements IStorage {
 
     const [burn] = await db
       .insert(burns)
-      .values({ pidakaId, senderUserId, receiverUserId, message, pidakaExcerpt })
+      .values({
+        pidakaId,
+        senderUserId,
+        receiverUserId,
+        message: seal(message),
+        pidakaExcerpt: seal(pidakaExcerpt),
+      })
       .returning();
 
     await db
@@ -169,15 +188,17 @@ export class DatabaseStorage implements IStorage {
       .set({ burnsReceivedCount: sql`${users.burnsReceivedCount} + 1` })
       .where(eq(users.id, receiverUserId));
 
-    return burn;
+    return revealBurn(burn);
   }
 
   async getUserBurnsInbox(userId: string): Promise<Burn[]> {
-    return db
+    const rows = await db
       .select()
       .from(burns)
       .where(eq(burns.receiverUserId, userId))
-      .orderBy(desc(burns.createdAt));
+      .orderBy(desc(burns.createdAt))
+      .limit(100);
+    return rows.map(revealBurn);
   }
 
   async countUnreadBurns(userId: string): Promise<number> {
@@ -211,12 +232,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWitnessCounts(): Promise<Record<string, number>> {
+    const live = await db
+      .select({ id: pidakas.id })
+      .from(pidakas)
+      .where(sql`${pidakas.expiresAt} > ${new Date()}`)
+      .orderBy(desc(pidakas.createdAt))
+      .limit(150);
+    const ids = live.map((row) => row.id);
+    if (ids.length === 0) return {};
     const rows = await db
       .select({
         pidakaId: pidakaViews.pidakaId,
         count: sql<number>`count(*)`,
       })
       .from(pidakaViews)
+      .where(inArray(pidakaViews.pidakaId, ids))
       .groupBy(pidakaViews.pidakaId);
     const counts: Record<string, number> = {};
     for (const row of rows) {
@@ -285,25 +315,27 @@ export class DatabaseStorage implements IStorage {
       .from(pidakas)
       .leftJoin(users, eq(pidakas.creatorUserId, users.id))
       .where(sql`${pidakas.expiresAt} > ${now}`)
-      .orderBy(desc(pidakas.createdAt));
+      .orderBy(desc(pidakas.createdAt))
+      .limit(200);
     return rows.map((row) => ({
       ...row,
+      content: revealPidaka(row).content,
       anonymousName: row.anonymousName || "unnamed",
     }));
   }
 
   async listAdminUsers() {
-    const rows = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        anonymousName: users.anonymousName,
-        authProvider: users.authProvider,
-        createdAt: users.createdAt,
-      })
-      .from(users)
-      .orderBy(desc(users.createdAt));
-    return rows;
+    const rows = await db.select().from(users).orderBy(desc(users.createdAt)).limit(200);
+    return rows.map((user) => {
+      const revealed = revealUser(user);
+      return {
+        id: revealed.id,
+        email: revealed.email,
+        anonymousName: revealed.anonymousName,
+        authProvider: revealed.authProvider,
+        createdAt: revealed.createdAt,
+      };
+    });
   }
 }
 

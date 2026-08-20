@@ -65,8 +65,9 @@ export function PrivacyCopy() {
             has already seen. That token is not your name.
           </li>
           <li>
-            <span className="font-medium text-foreground">Session.</span> A signed
-            token stored in this browser so you stay signed in.
+            <span className="font-medium text-foreground">Session.</span> An
+            HttpOnly cookie so you stay signed in. Scripts in this browser cannot
+            read it.
           </li>
           <li>
             <span className="font-medium text-foreground">This device only.</span>{" "}
@@ -88,6 +89,16 @@ export function PrivacyCopy() {
           To name you, to show the wall, to deliver pidakas to other people, to
           carry burns to the right inbox, to keep you signed in, and to stop abuse
           of the service. We do not use wall text to train public models.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="How we keep it">
+        <p>
+          Email, phone, pidaka text, and burns are encrypted at rest (AES-256-GCM)
+          in the database. Lookups use a separate blind index, not the raw address
+          or number. Passwords are hashed. Phone codes are stored as a digest, not
+          the digits. The wall you read is decrypted on the server for that
+          request. This is not end-to-end encryption between browsers.
         </p>
       </LegalSection>
 

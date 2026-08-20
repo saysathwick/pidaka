@@ -38,6 +38,15 @@ import { readPublicWall, readWallSettings, toPublicWall } from "./wall-settings"
 import { settingsHaveADoor } from "@shared/wall";
 import { generateAnonymousName } from "@shared/names";
 import { log } from "./index";
+import {
+  clearHearthCookie,
+  clearSessionCookie,
+  limitAuth,
+  limitHearth,
+  readSessionToken,
+  setHearthCookie,
+  setSessionCookie,
+} from "./http-security";
 
 if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET environment variable must be set");
@@ -85,13 +94,12 @@ function pidakaParam(req: Request): string | undefined {
 }
 
 function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  const token = readSessionToken(req);
+  if (!token) {
     return res.status(401).json({ message: "Authentication required" });
   }
   try {
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as { userId: string };
     req.userId = decoded.userId;
     next();
   } catch {
@@ -100,17 +108,24 @@ function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
 }
 
 function optionalAuth(req: AuthRequest, _res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith("Bearer ")) {
+  const token = readSessionToken(req);
+  if (token) {
     try {
-      const token = authHeader.split(" ")[1];
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as { userId: string };
       req.userId = decoded.userId;
     } catch {
       // Public read still works with a stale token.
     }
   }
   next();
+}
+
+const DUMMY_PASSWORD_HASH = "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
+
+function issueSession(res: Response, userId: string) {
+  const token = signAppToken(userId);
+  setSessionCookie(res, token);
+  return token;
 }
 
 export async function registerRoutes(
@@ -126,7 +141,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/session", async (req: Request, res: Response) => {
+  app.post("/api/admin/session", limitHearth, async (req: Request, res: Response) => {
     const expected = adminSecret();
     if (!expected) {
       return res.status(503).json({ message: "Set ADMIN_SECRET on this wall first" });
@@ -138,7 +153,13 @@ export async function registerRoutes(
     if (!secretsEqual(parsed.data.secret, expected)) {
       return res.status(401).json({ message: "That key does not open the hearth" });
     }
-    return res.json({ token: signAdminToken() });
+    setHearthCookie(res, signAdminToken());
+    return res.json({ ok: true });
+  });
+
+  app.post("/api/admin/logout", (_req: Request, res: Response) => {
+    clearHearthCookie(res);
+    return res.json({ ok: true });
   });
 
   app.get("/api/admin/overview", adminMiddleware as any, async (_req: AdminRequest, res: Response) => {
@@ -216,7 +237,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/register", async (req: Request, res: Response) => {
+  app.post("/api/auth/register", limitAuth, async (req: Request, res: Response) => {
     try {
       const wall = await readPublicWall();
       if (!wall.email) {
@@ -248,10 +269,9 @@ export async function registerRoutes(
         anonymousName,
       });
 
-      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
+      issueSession(res, user.id);
 
       return res.status(201).json({
-        token,
         created: true,
         user: await publicUser(user.id, {
           anonymousName: user.anonymousName,
@@ -264,7 +284,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/login", async (req: Request, res: Response) => {
+  app.post("/api/auth/login", limitAuth, async (req: Request, res: Response) => {
     try {
       const wall = await readPublicWall();
       if (!wall.email) {
@@ -279,19 +299,14 @@ export async function registerRoutes(
       const email = parsed.data.email.toLowerCase();
       const { password } = parsed.data;
       const user = await storage.getUserByEmail(email);
-      if (!user || !user.password) {
+      const valid = await bcrypt.compare(password, user?.password || DUMMY_PASSWORD_HASH);
+      if (!user || !user.password || !valid) {
         return res.status(401).json({ message: "Invalid email or password" });
       }
 
-      const valid = await bcrypt.compare(password, user.password);
-      if (!valid) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-
-      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
+      issueSession(res, user.id);
 
       return res.json({
-        token,
         user: await publicUser(user.id, {
           anonymousName: user.anonymousName,
           burnsSentCount: user.burnsSentCount,
@@ -304,9 +319,9 @@ export async function registerRoutes(
   });
 
   function finishRedirect(res: Response, origin: string, token: string, created: boolean) {
-    const params = new URLSearchParams({ token });
-    if (created) params.set("named", "1");
-    return res.redirect(`${origin}/?${params.toString()}`);
+    setSessionCookie(res, token);
+    const suffix = created ? "?named=1" : "";
+    return res.redirect(`${origin}/${suffix}`);
   }
 
   app.get("/api/auth/google", async (req: Request, res: Response) => {
@@ -405,7 +420,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/phone/start", async (req: Request, res: Response) => {
+  app.post("/api/auth/phone/start", limitAuth, async (req: Request, res: Response) => {
     try {
       const wall = await readPublicWall();
       if (!wall.phone) {
@@ -421,16 +436,19 @@ export async function registerRoutes(
       }
       const code = issuePhoneCode(phone);
       const sent = await sendPhoneCode(phone, code);
+      if (!sent.delivered && process.env.NODE_ENV === "production") {
+        return res.status(503).json({ message: "Phone is not wired on this wall" });
+      }
       return res.json({
         ok: true,
-        demoCode: sent.delivered ? undefined : code,
+        demoCode: sent.delivered || process.env.NODE_ENV === "production" ? undefined : code,
       });
     } catch (err: any) {
       return res.status(500).json({ message: err.message || "Could not send the code" });
     }
   });
 
-  app.post("/api/auth/phone/verify", async (req: Request, res: Response) => {
+  app.post("/api/auth/phone/verify", limitAuth, async (req: Request, res: Response) => {
     try {
       const wall = await readPublicWall();
       if (!wall.phone) {
@@ -454,8 +472,8 @@ export async function registerRoutes(
         phone,
         allowCreate: settings.registrationsOpen,
       });
+      issueSession(res, user.id);
       return res.json({
-        token: signAppToken(user.id),
         created,
         user: await publicUser(user.id, {
           anonymousName: user.anonymousName,
@@ -472,12 +490,18 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/auth/logout", (_req: Request, res: Response) => {
+    clearSessionCookie(res);
+    return res.json({ ok: true });
+  });
+
   app.get("/api/auth/me", authMiddleware as any, async (req: AuthRequest, res: Response) => {
     try {
       const user = await storage.getUser(req.userId!);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
+      issueSession(res, user.id);
       return res.json(await publicUser(user.id, {
         anonymousName: user.anonymousName,
         burnsSentCount: user.burnsSentCount,

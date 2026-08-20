@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { BurningCookieIcon } from "@/components/burning-cookie-icon";
@@ -22,25 +22,61 @@ interface PidakaCardProps {
   onSeen?: (id: string) => void;
 }
 
+const LONG_PRESS_MS = 420;
+
+function MoreDots() {
+  return (
+    <span
+      className="inline-flex items-center gap-1"
+      aria-hidden
+      data-testid="pidaka-more-dots"
+    >
+      <span className="pidaka-more-dot" />
+      <span className="pidaka-more-dot" />
+      <span className="pidaka-more-dot" />
+    </span>
+  );
+}
+
 export function PidakaCard({ pidaka, onBurn, arrived, onSeen }: PidakaCardProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLParagraphElement>(null);
   const reported = useRef(false);
+  const pressTimer = useRef<number | null>(null);
+  const held = useRef(false);
   const pages = useMemo(() => paginateText(pidaka.content), [pidaka.content]);
   const [page, setPage] = useState(0);
-  const [engaged, setEngaged] = useState(false);
-  const [hoverFine, setHoverFine] = useState(false);
-
-  useEffect(() => {
-    setHoverFine(window.matchMedia("(hover: hover) and (pointer: fine)").matches);
-  }, []);
+  const [expanded, setExpanded] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
     setPage(0);
-    setEngaged(false);
+    setExpanded(false);
   }, [pidaka.id, pidaka.content]);
 
   useEffect(() => {
-    if (!engaged || pages.length <= 1) return;
+    return () => {
+      if (pressTimer.current) window.clearTimeout(pressTimer.current);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (expanded) return;
+    const full = measureRef.current;
+    if (!full) return;
+    const update = () => {
+      const lineHeight = Number.parseFloat(getComputedStyle(full).lineHeight);
+      if (!Number.isFinite(lineHeight) || lineHeight <= 0) return;
+      setHasMore(full.scrollHeight > lineHeight * 2 + 2);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(full);
+    return () => observer.disconnect();
+  }, [pidaka.content, expanded]);
+
+  useEffect(() => {
+    if (!expanded || pages.length <= 1) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "ArrowLeft") {
         event.preventDefault();
@@ -53,7 +89,7 @@ export function PidakaCard({ pidaka, onBurn, arrived, onSeen }: PidakaCardProps)
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [engaged, pages.length]);
+  }, [expanded, pages.length]);
 
   useEffect(() => {
     if (pidaka.isOwn || pidaka.seen || !onSeen) return;
@@ -72,24 +108,66 @@ export function PidakaCard({ pidaka, onBurn, arrived, onSeen }: PidakaCardProps)
     return () => observer.disconnect();
   }, [pidaka.id, pidaka.isOwn, pidaka.seen, onSeen]);
 
+  const clearPress = () => {
+    if (pressTimer.current) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  };
+
+  const canExpand = hasMore || expanded;
   const index = Math.min(page, pages.length - 1);
   const multi = pages.length > 1;
+
+  const open = () => {
+    if (!hasMore && !expanded) return;
+    setExpanded(true);
+  };
+
+  const toggle = () => {
+    if (!hasMore && !expanded) return;
+    setExpanded((current) => {
+      if (current) setPage(0);
+      return !current;
+    });
+  };
 
   return (
     <div
       ref={rootRef}
-      className="relative h-56"
-      onMouseEnter={() => {
-        if (multi) setEngaged(true);
+      className={cn(
+        "relative",
+        expanded ? "h-56" : "h-[6.8rem] select-none",
+        canExpand ? "cursor-pointer" : "cursor-default",
+      )}
+      onPointerDown={(event) => {
+        if (event.button !== 0 || !canExpand) return;
+        held.current = false;
+        clearPress();
+        pressTimer.current = window.setTimeout(() => {
+          held.current = true;
+          open();
+        }, LONG_PRESS_MS);
       }}
-      onMouseLeave={() => {
-        if (!hoverFine) return;
-        setEngaged(false);
-        setPage(0);
-      }}
+      onPointerUp={clearPress}
+      onPointerCancel={clearPress}
+      onPointerLeave={clearPress}
       onClick={() => {
-        if (multi) setEngaged(true);
+        if (held.current) {
+          held.current = false;
+          return;
+        }
+        toggle();
       }}
+      onKeyDown={(event) => {
+        if (!canExpand) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggle();
+        }
+      }}
+      tabIndex={canExpand ? 0 : undefined}
+      aria-expanded={canExpand ? expanded : undefined}
     >
       <div
         className={cn(
@@ -99,13 +177,44 @@ export function PidakaCard({ pidaka, onBurn, arrived, onSeen }: PidakaCardProps)
         )}
         data-testid={`card-pidaka-${pidaka.id}`}
       >
-        <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden px-5 pt-5 pb-4">
-          <p
-            className="min-h-0 flex-1 overflow-hidden text-[15px] leading-relaxed whitespace-pre-wrap break-words"
-            data-testid={`text-content-${pidaka.id}`}
-          >
-            {pages[index]}
-          </p>
+        <div
+          className={cn(
+            "flex h-full min-h-0 flex-col overflow-hidden",
+            expanded ? "gap-3 px-5 pt-5 pb-4" : "gap-2 px-4 py-3",
+          )}
+        >
+          {expanded ? (
+            <p
+              className="min-h-0 flex-1 overflow-hidden text-[15px] leading-relaxed whitespace-pre-wrap break-words"
+              data-testid={`text-content-${pidaka.id}`}
+            >
+              {pages[index]}
+            </p>
+          ) : (
+            <div className="relative flex h-[3.05rem] items-center">
+              <p
+                ref={measureRef}
+                className="invisible absolute inset-x-0 top-0 whitespace-pre-wrap break-words text-[15px] leading-relaxed"
+                aria-hidden
+              >
+                {pidaka.content}
+              </p>
+              <p
+                className={cn(
+                  "w-full text-[15px] leading-relaxed whitespace-pre-wrap break-words line-clamp-2",
+                  hasMore && "pr-7",
+                )}
+                data-testid={`text-content-${pidaka.id}`}
+              >
+                {pidaka.content}
+              </p>
+              {hasMore && (
+                <span className="pointer-events-none absolute bottom-0.5 right-0">
+                  <MoreDots />
+                </span>
+              )}
+            </div>
+          )}
           <div className="mt-auto flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
               <time
@@ -115,19 +224,13 @@ export function PidakaCard({ pidaka, onBurn, arrived, onSeen }: PidakaCardProps)
               >
                 {formatDistanceToNow(new Date(pidaka.createdAt), { addSuffix: true })}
               </time>
-              {multi && (
-                engaged ? (
-                  <TextPager
-                    page={index}
-                    pages={pages.length}
-                    onPage={setPage}
-                    id={pidaka.id}
-                  />
-                ) : (
-                  <span className="text-[11px] tabular-nums tracking-[0.16em] text-muted-foreground/70">
-                    {index + 1}/{pages.length}
-                  </span>
-                )
+              {multi && expanded && (
+                <TextPager
+                  page={index}
+                  pages={pages.length}
+                  onPage={setPage}
+                  id={pidaka.id}
+                />
               )}
             </div>
             {pidaka.isOwn ? (
@@ -138,8 +241,12 @@ export function PidakaCard({ pidaka, onBurn, arrived, onSeen }: PidakaCardProps)
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onBurn(pidaka.id)}
-                className="text-primary"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onBurn(pidaka.id);
+                }}
+                className="h-7 px-2 text-primary"
                 data-testid={`button-burn-${pidaka.id}`}
               >
                 <BurningCookieIcon className="h-3.5 w-3.5 mr-1" isLit />

@@ -10,9 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import {
   clearHearthToken,
-  getHearthToken,
   hearthRequest,
-  setHearthToken,
 } from "@/lib/hearth";
 import type { AdminPidaka, AdminStats, AdminUser, PublicWall, WallSettings } from "@shared/wall";
 
@@ -32,12 +30,12 @@ export default function HearthPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [secret, setSecret] = useState("");
-  const [token, setToken] = useState(() => getHearthToken());
+  const [open, setOpen] = useState(false);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [pidakas, setPidakas] = useState<AdminPidaka[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [notice, setNotice] = useState("");
-  const [loading, setLoading] = useState(Boolean(getHearthToken()));
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = async () => {
@@ -52,11 +50,12 @@ export default function HearthPage() {
       setNotice(nextOverview.settings.notice);
       setPidakas(nextPidakas);
       setUsers(nextUsers);
+      setOpen(true);
     } catch (err) {
       const status = (err as Error & { status?: number }).status;
       if (status === 401) {
         clearHearthToken();
-        setToken(null);
+        setOpen(false);
         setOverview(null);
         return;
       }
@@ -71,17 +70,16 @@ export default function HearthPage() {
   };
 
   useEffect(() => {
-    if (token) void load();
-  }, [token]);
+    void load();
+  }, []);
 
   const enter = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy("enter");
     try {
-      const data = await hearthRequest("POST", "/api/admin/session", { secret }) as { token: string };
-      setHearthToken(data.token);
-      setToken(data.token);
+      await hearthRequest("POST", "/api/admin/session", { secret });
       setSecret("");
+      await load();
     } catch (err) {
       toast({
         title: "That key does not open the hearth",
@@ -138,10 +136,11 @@ export default function HearthPage() {
 
   const leave = () => {
     clearHearthToken();
-    setToken(null);
+    setOpen(false);
     setOverview(null);
     setPidakas([]);
     setUsers([]);
+    void fetch("/api/admin/logout", { method: "POST", credentials: "include" });
   };
 
   return (
@@ -152,7 +151,7 @@ export default function HearthPage() {
             <p className="font-serif text-lg tracking-[0.18em] uppercase">Pidaka</p>
             <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Hearth</p>
           </button>
-          {token && (
+          {open && (
             <Button variant="ghost" size="sm" onClick={leave} data-testid="button-hearth-leave">
               Leave
             </Button>
@@ -161,7 +160,7 @@ export default function HearthPage() {
       </header>
 
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10">
-        {!token && (
+        {!open && !loading && (
           <form onSubmit={enter} className="mx-auto flex w-full max-w-sm flex-col items-center gap-5">
             <CowDungCake variant="hero" isLit className="h-20 w-20" />
             <div className="text-center">
@@ -190,7 +189,7 @@ export default function HearthPage() {
           </form>
         )}
 
-        {token && loading && !overview && (
+        {loading && !overview && (
           <p className="text-center text-sm text-muted-foreground">Tending the fire...</p>
         )}
 

@@ -3,6 +3,8 @@ import type { Burn, InsertUser, Pidaka, User } from "@shared/schema";
 import { excerptPidaka } from "@shared/names";
 import type { WallSettings } from "@shared/wall";
 import type { IStorage } from "./storage";
+import { blind } from "./crypto";
+import { revealUser, vaultUserInsert } from "./vault";
 
 function hoursAgo(hours: number) {
   return new Date(Date.now() - hours * 3600000);
@@ -71,31 +73,40 @@ export class DemoStorage implements IStorage {
   private views = new Map<string, Set<string>>();
 
   async getUser(id: string) {
-    return this.users.get(id);
+    const user = this.users.get(id);
+    return user ? revealUser(user) : undefined;
   }
 
   async getUserByEmail(email: string) {
-    return this.usersByEmail.get(email.toLowerCase());
+    const normalized = email.toLowerCase();
+    const user = this.usersByEmail.get(normalized) || this.usersByEmail.get(blind(normalized));
+    return user ? revealUser(user) : undefined;
   }
 
   async getUserByPhone(phone: string) {
-    return this.usersByPhone.get(phone);
+    const user = this.usersByPhone.get(phone) || this.usersByPhone.get(blind(phone));
+    return user ? revealUser(user) : undefined;
   }
 
   async getUserByAuth(provider: string, subject: string) {
-    return this.usersByAuth.get(`${provider}:${subject}`);
+    const user = this.usersByAuth.get(`${provider}:${subject}`);
+    return user ? revealUser(user) : undefined;
   }
 
   async getUserByAnonymousName(name: string) {
-    return Array.from(this.users.values()).find((user) => user.anonymousName === name);
+    const user = Array.from(this.users.values()).find((row) => row.anonymousName === name);
+    return user ? revealUser(user) : undefined;
   }
 
   async createUser(insertUser: InsertUser) {
+    const vaulted = vaultUserInsert({ email: insertUser.email, phone: insertUser.phone });
     const user: User = {
       id: randomUUID(),
-      email: insertUser.email,
+      email: vaulted.email,
+      emailEnc: vaulted.emailEnc,
       password: insertUser.password ?? "",
-      phone: insertUser.phone ?? null,
+      phone: vaulted.phone,
+      phoneEnc: vaulted.phoneEnc,
       authProvider: insertUser.authProvider ?? "password",
       authSubject: insertUser.authSubject ?? "",
       anonymousName: insertUser.anonymousName,
@@ -104,7 +115,9 @@ export class DemoStorage implements IStorage {
       createdAt: new Date(),
     };
     this.users.set(user.id, user);
-    this.usersByEmail.set(user.email.toLowerCase(), user);
+    this.usersByEmail.set(insertUser.email.toLowerCase(), user);
+    this.usersByEmail.set(vaulted.email, user);
+    if (insertUser.phone) this.usersByPhone.set(insertUser.phone, user);
     if (user.phone) this.usersByPhone.set(user.phone, user);
     if (user.authSubject) this.usersByAuth.set(`${user.authProvider}:${user.authSubject}`, user);
 
@@ -121,7 +134,7 @@ export class DemoStorage implements IStorage {
     this.burns.unshift(welcome);
     user.burnsReceivedCount = 1;
 
-    return user;
+    return revealUser(user);
   }
 
   async getUserStats(id: string) {
@@ -136,7 +149,8 @@ export class DemoStorage implements IStorage {
     const now = Date.now();
     return this.pidakas
       .filter((p) => p.expiresAt.getTime() > now)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 150);
   }
 
   async getPidakasByCreator(userId: string) {
@@ -201,7 +215,7 @@ export class DemoStorage implements IStorage {
   }
 
   async getUserBurnsInbox(userId: string) {
-    return this.burns.filter((b) => b.receiverUserId === userId);
+    return this.burns.filter((b) => b.receiverUserId === userId).slice(0, 100);
   }
 
   async countUnreadBurns(userId: string) {
@@ -272,6 +286,7 @@ export class DemoStorage implements IStorage {
     return this.pidakas
       .filter((p) => p.expiresAt.getTime() > now)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 200)
       .map((p) => ({
         id: p.id,
         content: p.content,
@@ -285,12 +300,16 @@ export class DemoStorage implements IStorage {
   async listAdminUsers() {
     return Array.from(this.users.values())
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .map((user) => ({
-        id: user.id,
-        email: user.email,
-        anonymousName: user.anonymousName,
-        authProvider: user.authProvider,
-        createdAt: user.createdAt,
-      }));
+      .slice(0, 200)
+      .map((user) => {
+        const revealed = revealUser(user);
+        return {
+          id: revealed.id,
+          email: revealed.email,
+          anonymousName: revealed.anonymousName,
+          authProvider: revealed.authProvider,
+          createdAt: revealed.createdAt,
+        };
+      });
   }
 }
