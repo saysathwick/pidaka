@@ -4,8 +4,10 @@ const statements = [
   `CREATE TABLE IF NOT EXISTS users (
     id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
     email text NOT NULL UNIQUE,
+    email_enc text,
     password text NOT NULL DEFAULT '',
     phone text UNIQUE,
+    phone_enc text,
     auth_provider text NOT NULL DEFAULT 'password',
     auth_subject text NOT NULL DEFAULT '',
     anonymous_name text NOT NULL UNIQUE,
@@ -14,6 +16,8 @@ const statements = [
     created_at timestamp NOT NULL DEFAULT now()
   )`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_enc text`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_enc text`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider text NOT NULL DEFAULT 'password'`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_subject text NOT NULL DEFAULT ''`,
   `CREATE UNIQUE INDEX IF NOT EXISTS users_phone_unique ON users (phone)`,

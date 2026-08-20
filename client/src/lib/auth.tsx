@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
-import { apiRequest } from "./queryClient";
 
 interface UserData {
   anonymousName: string;
@@ -9,7 +8,7 @@ interface UserData {
 }
 
 interface SessionPayload {
-  token: string;
+  token?: string;
   user: UserData & { unreadCount?: number };
   created?: boolean;
 }
@@ -31,34 +30,33 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem("pidaka_token"));
+  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [justNamed, setJustNamed] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const namedRef = useRef(false);
 
-  const applyUser = useCallback((userData: UserData, nextToken: string, created?: boolean) => {
-    localStorage.setItem("pidaka_token", nextToken);
-    setToken(nextToken);
+  const applyUser = useCallback((userData: UserData, created?: boolean) => {
+    localStorage.removeItem("pidaka_token");
+    setToken("cookie");
     setUser({ ...userData, unreadCount: userData.unreadCount ?? 0 });
     if (created) setJustNamed(userData.anonymousName);
   }, []);
 
   const refreshUser = useCallback(async () => {
-    const storedToken = localStorage.getItem("pidaka_token");
-    if (!storedToken) {
-      setUser(null);
-      setIsLoading(false);
-      return;
-    }
+    const leftover = localStorage.getItem("pidaka_token");
+    const headers: Record<string, string> = {};
+    if (leftover) headers.Authorization = `Bearer ${leftover}`;
     try {
       const res = await fetch("/api/auth/me", {
-        headers: { Authorization: `Bearer ${storedToken}` },
+        credentials: "include",
+        headers,
       });
       if (res.ok) {
         const userData = await res.json();
+        localStorage.removeItem("pidaka_token");
         setUser({ ...userData, unreadCount: userData.unreadCount ?? 0 });
-        setToken(storedToken);
+        setToken("cookie");
         if (namedRef.current) {
           setJustNamed(userData.anonymousName);
           namedRef.current = false;
@@ -88,7 +86,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (named === "1") namedRef.current = true;
     if (inbound) {
       localStorage.setItem("pidaka_token", inbound);
-      setToken(inbound);
     }
     if (inbound || named || error) {
       const url = new URL(window.location.href);
@@ -101,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const completeSession = (data: SessionPayload) => {
-    applyUser({ ...data.user, unreadCount: data.user.unreadCount ?? 0 }, data.token, data.created);
+    applyUser({ ...data.user, unreadCount: data.user.unreadCount ?? 0 }, data.created);
   };
 
   const logout = () => {
@@ -109,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setUser(null);
     setJustNamed(null);
+    void fetch("/api/auth/logout", { method: "POST", credentials: "include" });
   };
 
   const clearJustNamed = useCallback(() => setJustNamed(null), []);

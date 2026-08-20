@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
+import { digestsEqual } from "./crypto";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
 import { isDemoMode } from "./db";
@@ -9,7 +10,7 @@ const JWT_SECRET = process.env.SESSION_SECRET!;
 
 type AuthProvider = "google" | "apple" | "phone";
 
-const otpStore = new Map<string, { code: string; expiresAt: number }>();
+const otpStore = new Map<string, { digest: Buffer; expiresAt: number; tries: number }>();
 
 export function publicOrigin(req: { protocol: string; get: (h: string) => string | undefined }): string {
   const env = process.env.APP_PUBLIC_URL?.replace(/\/$/, "");
@@ -20,16 +21,16 @@ export function publicOrigin(req: { protocol: string; get: (h: string) => string
 }
 
 export function signAppToken(userId: string) {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "7d" });
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "7d", algorithm: "HS256" });
 }
 
 export function signOAuthState(provider: AuthProvider) {
-  return jwt.sign({ provider, n: randomBytes(8).toString("hex") }, JWT_SECRET, { expiresIn: "10m" });
+  return jwt.sign({ provider, n: randomBytes(8).toString("hex") }, JWT_SECRET, { expiresIn: "10m", algorithm: "HS256" });
 }
 
 export function readOAuthState(state: string): AuthProvider | null {
   try {
-    const decoded = jwt.verify(state, JWT_SECRET) as { provider?: string };
+    const decoded = jwt.verify(state, JWT_SECRET, { algorithms: ["HS256"] }) as { provider?: string };
     if (decoded.provider === "google" || decoded.provider === "apple") return decoded.provider;
     return null;
   } catch {
@@ -94,9 +95,21 @@ export function normalizePhone(raw: string): string | null {
   return hasPlus ? `+${digits}` : `+${digits}`;
 }
 
+function otpDigest(phone: string, code: string) {
+  return createHash("sha256").update(`${process.env.SESSION_SECRET}:${phone}:${code}`).digest();
+}
+
 export function issuePhoneCode(phone: string) {
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-  otpStore.set(phone, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
+  const now = Date.now();
+  for (const [key, row] of Array.from(otpStore.entries())) {
+    if (row.expiresAt < now) otpStore.delete(key);
+  }
+  if (otpStore.size > 2_000) {
+    const oldest = Array.from(otpStore.entries()).sort((a, b) => a[1].expiresAt - b[1].expiresAt);
+    for (const [key] of oldest.slice(0, otpStore.size - 1_500)) otpStore.delete(key);
+  }
+  otpStore.set(phone, { digest: otpDigest(phone, code), expiresAt: now + 5 * 60 * 1000, tries: 0 });
   return code;
 }
 
@@ -107,7 +120,13 @@ export function consumePhoneCode(phone: string, code: string) {
     otpStore.delete(phone);
     return false;
   }
-  if (row.code !== code) return false;
+  if (row.tries >= 5) {
+    otpStore.delete(phone);
+    return false;
+  }
+  row.tries += 1;
+  const ok = digestsEqual(row.digest, otpDigest(phone, code));
+  if (!ok) return false;
   otpStore.delete(phone);
   return true;
 }
@@ -117,7 +136,9 @@ export async function sendPhoneCode(phone: string, code: string) {
   const token = process.env.TWILIO_AUTH_TOKEN;
   const from = process.env.TWILIO_FROM;
   if (!sid || !token || !from) {
-    console.log(`[auth] Phone code for ${phone}: ${code}`);
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[auth] Phone code for ${phone}: ${code}`);
+    }
     return { delivered: false as const };
   }
   const body = new URLSearchParams({

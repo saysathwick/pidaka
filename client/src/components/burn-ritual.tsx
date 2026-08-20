@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +20,10 @@ export function BurnRitual({ pidaka, open, sending, onClose, onSend }: BurnRitua
   const [message, setMessage] = useState("");
   const { handleChange, trimmed, used, remaining } = useLimitedText(message, setMessage);
   const atLimit = remaining === 0;
+
+  useEffect(() => {
+    setMessage("");
+  }, [open, pidaka?.id]);
 
   const handleClose = () => {
     setMessage("");

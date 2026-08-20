@@ -184,10 +184,9 @@ export default function WallPage() {
         {isLoading && !pidakas ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="composer-glass h-56 rounded-xl border px-5 pt-4 pb-4 flex flex-col gap-3">
-                <Skeleton className="h-4 w-full bg-foreground/10" />
-                <Skeleton className="h-4 w-3/4 bg-foreground/10" />
-                <Skeleton className="h-2 w-full bg-foreground/10" />
+              <div key={i} className="composer-glass h-[6.8rem] rounded-xl border px-4 py-3 flex flex-col gap-2">
+                <Skeleton className="h-[3.05rem] w-full bg-foreground/10" />
+                <Skeleton className="h-3 w-1/3 bg-foreground/10" />
               </div>
             ))}
           </div>

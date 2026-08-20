@@ -96,11 +96,25 @@ export default function InboxPage() {
                 className="flex flex-col gap-2"
                 data-testid={`thread-pidaka-${thread.id}`}
               >
-                <div className="composer-glass own-pidaka rounded-xl border" data-testid={`card-own-pidaka-${thread.id}`}>
+                <div
+                  className={cn(
+                    "composer-glass own-pidaka rounded-xl border",
+                    !thread.live && "opacity-90",
+                  )}
+                  data-testid={`card-own-pidaka-${thread.id}`}
+                >
                   <div className="px-5 pt-5 pb-4 flex flex-col gap-3">
+                    {!thread.live && (
+                      <p
+                        className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
+                        data-testid={`text-pidaka-taken-down-${thread.id}`}
+                      >
+                        Taken down
+                      </p>
+                    )}
                     <PagedCopy
                       text={thread.content}
-                      className="text-[15px]"
+                      className={cn("text-[15px]", !thread.live && "text-muted-foreground")}
                       testId={`text-own-pidaka-${thread.id}`}
                     />
                     <div className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -112,6 +126,11 @@ export default function InboxPage() {
                           : ` · ${thread.burns.length} ${thread.burns.length === 1 ? "burn" : "burns"}`}
                       </span>
                     </div>
+                    {!thread.live && (
+                      <p className="text-sm text-muted-foreground">
+                        This pidaka is no longer on the wall. The burns stay here.
+                      </p>
+                    )}
                   </div>
                 </div>
 
