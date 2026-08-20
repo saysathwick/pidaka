@@ -5,7 +5,6 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { isDemoMode } from "./db";
 import { ensureSchema } from "./ensure-schema";
-import { adminSecret } from "./admin";
 import { securityHeaders } from "./http-security";
 import { migrateVault } from "./vault";
 
@@ -100,11 +99,7 @@ app.use((req, res, next) => {
       log("no DATABASE_URL — running in-memory demo wall", "demo");
     }
     if (!process.env.ADMIN_SECRET?.trim()) {
-      if (adminSecret()) {
-        log("ADMIN_SECRET unset — local hearth key is SESSION_SECRET + ':hearth'", "hearth");
-      } else {
-        log("ADMIN_SECRET is unset — /hearth is locked", "hearth");
-      }
+      log("ADMIN_SECRET is unset — /hearth is locked", "hearth");
     }
   });
 })();

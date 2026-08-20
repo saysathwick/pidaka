@@ -10,12 +10,7 @@ export interface AdminRequest extends Request {
 }
 
 export function adminSecret(): string | null {
-  const fromEnv = process.env.ADMIN_SECRET?.trim();
-  if (fromEnv) return fromEnv;
-  if (process.env.NODE_ENV !== "production") {
-    return `${process.env.SESSION_SECRET}:hearth`;
-  }
-  return null;
+  return process.env.ADMIN_SECRET?.trim() || null;
 }
 
 export function secretsEqual(provided: string, expected: string) {
