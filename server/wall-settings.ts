@@ -1,4 +1,5 @@
 import { appleConfigured, demoOAuthEnabled, googleConfigured } from "./identity";
+import { smsConfigured } from "./sms";
 import { storage } from "./storage";
 import type { PublicWall, WallSettings } from "@shared/wall";
 
@@ -19,10 +20,11 @@ export function seedWallSettings(): WallSettings {
 export function toPublicWall(settings: WallSettings): PublicWall {
   const googleReady = googleConfigured() || demoOAuthEnabled();
   const appleReady = appleConfigured() || demoOAuthEnabled();
+  const phoneReady = smsConfigured() || demoOAuthEnabled();
   return {
     google: settings.googleLogin && googleReady,
     apple: settings.appleLogin && appleReady,
-    phone: settings.phoneLogin,
+    phone: settings.phoneLogin && phoneReady,
     email: settings.emailLogin,
     registrations: settings.registrationsOpen,
     posting: settings.postingOpen,
@@ -30,6 +32,7 @@ export function toPublicWall(settings: WallSettings): PublicWall {
     notice: settings.notice.trim(),
     googleReady,
     appleReady,
+    phoneReady,
   };
 }
 
