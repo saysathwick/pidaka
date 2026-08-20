@@ -62,25 +62,46 @@ const HEARTH_COOKIE = "pidaka_hearth";
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60;
 const HEARTH_MAX_AGE = 12 * 60 * 60;
 
-function cookieFlags(maxAge: number) {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+function cookieSecure(res: Response) {
+  const req = res.req;
+  const proto = String(req.get("x-forwarded-proto") || req.protocol || "")
+    .split(",")[0]
+    .trim();
+  return proto === "https";
+}
+
+function serializeCookie(name: string, value: string, maxAgeSec: number, res: Response) {
+  const expires = (maxAgeSec <= 0 ? new Date(0) : new Date(Date.now() + maxAgeSec * 1000)).toUTCString();
+  const secure = cookieSecure(res) ? "; Secure" : "";
+  return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSec}; Expires=${expires}${secure}`;
+}
+
+function writeCookie(res: Response, cookie: string) {
+  const prev = res.getHeader("Set-Cookie");
+  if (!prev) {
+    res.setHeader("Set-Cookie", [cookie]);
+  } else if (Array.isArray(prev)) {
+    res.setHeader("Set-Cookie", [...prev.map(String), cookie]);
+  } else {
+    res.setHeader("Set-Cookie", [String(prev), cookie]);
+  }
+  res.setHeader("Cache-Control", "private, no-store");
 }
 
 export function setSessionCookie(res: Response, token: string) {
-  res.append("Set-Cookie", `${SESSION_COOKIE}=${encodeURIComponent(token)}; ${cookieFlags(SESSION_MAX_AGE)}`);
+  writeCookie(res, serializeCookie(SESSION_COOKIE, token, SESSION_MAX_AGE, res));
 }
 
 export function clearSessionCookie(res: Response) {
-  res.append("Set-Cookie", `${SESSION_COOKIE}=; ${cookieFlags(0)}`);
+  writeCookie(res, serializeCookie(SESSION_COOKIE, "", 0, res));
 }
 
 export function setHearthCookie(res: Response, token: string) {
-  res.append("Set-Cookie", `${HEARTH_COOKIE}=${encodeURIComponent(token)}; ${cookieFlags(HEARTH_MAX_AGE)}`);
+  writeCookie(res, serializeCookie(HEARTH_COOKIE, token, HEARTH_MAX_AGE, res));
 }
 
 export function clearHearthCookie(res: Response) {
-  res.append("Set-Cookie", `${HEARTH_COOKIE}=; ${cookieFlags(0)}`);
+  writeCookie(res, serializeCookie(HEARTH_COOKIE, "", 0, res));
 }
 
 export function readCookie(req: Request, name: string) {
@@ -90,8 +111,12 @@ export function readCookie(req: Request, name: string) {
     const trimmed = part.trim();
     const eq = trimmed.indexOf("=");
     if (eq <= 0) continue;
-    if (trimmed.slice(0, eq) === name) {
-      return decodeURIComponent(trimmed.slice(eq + 1));
+    if (trimmed.slice(0, eq) !== name) continue;
+    const raw = trimmed.slice(eq + 1);
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
     }
   }
   return null;
