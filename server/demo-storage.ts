@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Burn, InsertUser, Pidaka, User } from "@shared/schema";
 import { excerptPidaka } from "@shared/names";
+import type { WallSettings } from "@shared/wall";
 import type { IStorage } from "./storage";
 
 function hoursAgo(hours: number) {
@@ -234,5 +235,62 @@ export class DemoStorage implements IStorage {
       }
     }
     return counts;
+  }
+
+  private wall: WallSettings | null = null;
+
+  async deletePidaka(id: string) {
+    const before = this.pidakas.length;
+    this.pidakas = this.pidakas.filter((p) => p.id !== id);
+    for (const seen of Array.from(this.views.values())) {
+      seen.delete(id);
+    }
+    return this.pidakas.length !== before;
+  }
+
+  async getWallSettings(seed: WallSettings) {
+    if (!this.wall) this.wall = { ...seed };
+    return { ...this.wall };
+  }
+
+  async saveWallSettings(next: WallSettings) {
+    this.wall = { ...next };
+    return { ...this.wall };
+  }
+
+  async adminStats() {
+    const now = Date.now();
+    return {
+      users: this.users.size,
+      pidakas: this.pidakas.filter((p) => p.expiresAt.getTime() > now).length,
+      burns: this.burns.length,
+    };
+  }
+
+  async listAdminPidakas() {
+    const now = Date.now();
+    return this.pidakas
+      .filter((p) => p.expiresAt.getTime() > now)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((p) => ({
+        id: p.id,
+        content: p.content,
+        createdAt: p.createdAt,
+        expiresAt: p.expiresAt,
+        creatorUserId: p.creatorUserId,
+        anonymousName: this.users.get(p.creatorUserId)?.anonymousName || p.creatorUserId,
+      }));
+  }
+
+  async listAdminUsers() {
+    return Array.from(this.users.values())
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((user) => ({
+        id: user.id,
+        email: user.email,
+        anonymousName: user.anonymousName,
+        authProvider: user.authProvider,
+        createdAt: user.createdAt,
+      }));
   }
 }

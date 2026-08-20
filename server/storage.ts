@@ -7,11 +7,13 @@ import {
   pidakas,
   burns,
   pidakaViews,
+  wallSettings,
   type User,
   type InsertUser,
   type Pidaka,
   type Burn,
 } from "@shared/schema";
+import { WALL_SETTINGS_ID, type WallSettings } from "@shared/wall";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -26,6 +28,7 @@ export interface IStorage {
   getPidakasByCreator(userId: string): Promise<Pidaka[]>;
   createPidaka(content: string, creatorUserId: string): Promise<Pidaka>;
   getPidaka(id: string): Promise<Pidaka | undefined>;
+  deletePidaka(id: string): Promise<boolean>;
   deleteExpiredPidakas(): Promise<void>;
 
   createBurn(pidakaId: string, senderUserId: string, receiverUserId: string, message: string): Promise<Burn>;
@@ -35,6 +38,25 @@ export interface IStorage {
   getSeenIds(viewerId: string): Promise<string[]>;
   markSeen(pidakaId: string, viewerId: string): Promise<void>;
   getWitnessCounts(): Promise<Record<string, number>>;
+
+  getWallSettings(seed: WallSettings): Promise<WallSettings>;
+  saveWallSettings(next: WallSettings): Promise<WallSettings>;
+  adminStats(): Promise<{ users: number; pidakas: number; burns: number }>;
+  listAdminPidakas(): Promise<Array<{
+    id: string;
+    content: string;
+    createdAt: Date;
+    expiresAt: Date;
+    creatorUserId: string;
+    anonymousName: string;
+  }>>;
+  listAdminUsers(): Promise<Array<{
+    id: string;
+    email: string;
+    anonymousName: string;
+    authProvider: string;
+    createdAt: Date;
+  }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -202,6 +224,109 @@ export class DatabaseStorage implements IStorage {
     }
     return counts;
   }
+
+  async deletePidaka(id: string): Promise<boolean> {
+    await db.delete(pidakaViews).where(eq(pidakaViews.pidakaId, id));
+    const removed = await db.delete(pidakas).where(eq(pidakas.id, id)).returning({ id: pidakas.id });
+    return removed.length > 0;
+  }
+
+  async getWallSettings(seed: WallSettings): Promise<WallSettings> {
+    const [row] = await db.select().from(wallSettings).where(eq(wallSettings.id, WALL_SETTINGS_ID));
+    if (row) return fromRow(row);
+    const [created] = await db
+      .insert(wallSettings)
+      .values({ id: WALL_SETTINGS_ID, ...seed })
+      .onConflictDoNothing()
+      .returning();
+    if (created) return fromRow(created);
+    const [again] = await db.select().from(wallSettings).where(eq(wallSettings.id, WALL_SETTINGS_ID));
+    return again ? fromRow(again) : seed;
+  }
+
+  async saveWallSettings(next: WallSettings): Promise<WallSettings> {
+    const [row] = await db
+      .insert(wallSettings)
+      .values({ id: WALL_SETTINGS_ID, ...next, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: wallSettings.id,
+        set: { ...next, updatedAt: new Date() },
+      })
+      .returning();
+    return fromRow(row);
+  }
+
+  async adminStats() {
+    const now = new Date();
+    const [usersRow] = await db.select({ count: sql<number>`count(*)` }).from(users);
+    const [pidakaRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(pidakas)
+      .where(sql`${pidakas.expiresAt} > ${now}`);
+    const [burnRow] = await db.select({ count: sql<number>`count(*)` }).from(burns);
+    return {
+      users: Number(usersRow?.count ?? 0),
+      pidakas: Number(pidakaRow?.count ?? 0),
+      burns: Number(burnRow?.count ?? 0),
+    };
+  }
+
+  async listAdminPidakas() {
+    const now = new Date();
+    const rows = await db
+      .select({
+        id: pidakas.id,
+        content: pidakas.content,
+        createdAt: pidakas.createdAt,
+        expiresAt: pidakas.expiresAt,
+        creatorUserId: pidakas.creatorUserId,
+        anonymousName: users.anonymousName,
+      })
+      .from(pidakas)
+      .leftJoin(users, eq(pidakas.creatorUserId, users.id))
+      .where(sql`${pidakas.expiresAt} > ${now}`)
+      .orderBy(desc(pidakas.createdAt));
+    return rows.map((row) => ({
+      ...row,
+      anonymousName: row.anonymousName || "unnamed",
+    }));
+  }
+
+  async listAdminUsers() {
+    const rows = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        anonymousName: users.anonymousName,
+        authProvider: users.authProvider,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .orderBy(desc(users.createdAt));
+    return rows;
+  }
+}
+
+function fromRow(row: {
+  googleLogin: boolean;
+  appleLogin: boolean;
+  phoneLogin: boolean;
+  emailLogin: boolean;
+  registrationsOpen: boolean;
+  postingOpen: boolean;
+  burningOpen: boolean;
+  notice: string;
+}): WallSettings {
+  return {
+    googleLogin: row.googleLogin,
+    appleLogin: row.appleLogin,
+    phoneLogin: row.phoneLogin,
+    emailLogin: row.emailLogin,
+    registrationsOpen: row.registrationsOpen,
+    postingOpen: row.postingOpen,
+    burningOpen: row.burningOpen,
+    notice: row.notice,
+  };
 }
 
 export const storage: IStorage = isDemoMode

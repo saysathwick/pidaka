@@ -12,6 +12,7 @@ import WallPage from "@/pages/wall";
 import InboxPage from "@/pages/inbox";
 import NotFound from "@/pages/not-found";
 import AboutPage from "@/pages/about";
+import HearthPage from "@/pages/hearth";
 import { usePageMeta } from "@/lib/page-meta";
 import { CinematicIntro, shouldPlayIntro } from "@/components/cinematic-intro";
 import { NameReveal } from "@/components/name-reveal";
@@ -39,6 +40,11 @@ function AppContent() {
   const [location] = useLocation();
   const [introDone, setIntroDone] = useState(() => !shouldPlayIntro());
   usePageMeta(location);
+  const onHearth = location === "/hearth";
+
+  if (onHearth) {
+    return <HearthPage />;
+  }
 
   if (!introDone) {
     return <CinematicIntro onComplete={() => setIntroDone(true)} />;
@@ -84,6 +90,7 @@ function AppContent() {
             <Route path="/privacy" component={AboutPage} />
             <Route path="/terms" component={AboutPage} />
             <Route path="/contact" component={AboutPage} />
+            <Route path="/hearth" component={HearthPage} />
             <Route component={NotFound} />
           </Switch>
         </motion.div>

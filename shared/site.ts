@@ -67,6 +67,9 @@ export function isAppPath(pathname: string): pathname is AppPath {
 
 export function metaForPath(pathname: string): PageMeta {
   const path = normalizePath(pathname);
+  if (path === "/hearth") {
+    return { title: "Hearth — Pidaka", description: "The keeper's room." };
+  }
   if (isAppPath(path)) return PAGE_META[path];
   return NOT_FOUND_META;
 }

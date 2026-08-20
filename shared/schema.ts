@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, primaryKey, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -47,6 +47,19 @@ export const pidakaViews = pgTable(
   }),
 );
 
+export const wallSettings = pgTable("wall_settings", {
+  id: varchar("id").primaryKey(),
+  googleLogin: boolean("google_login").notNull().default(false),
+  appleLogin: boolean("apple_login").notNull().default(false),
+  phoneLogin: boolean("phone_login").notNull().default(true),
+  emailLogin: boolean("email_login").notNull().default(true),
+  registrationsOpen: boolean("registrations_open").notNull().default(true),
+  postingOpen: boolean("posting_open").notNull().default(true),
+  burningOpen: boolean("burning_open").notNull().default(true),
+  notice: text("notice").notNull().default(""),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const registerSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
@@ -74,6 +87,21 @@ export const insertBurnSchema = z.object({
   message: z.string().min(1, "Message is required").max(3000, "Maximum 3000 characters"),
 });
 
+export const adminSessionSchema = z.object({
+  secret: z.string().min(1, "Enter the hearth key"),
+});
+
+export const wallSettingsPatchSchema = z.object({
+  googleLogin: z.boolean().optional(),
+  appleLogin: z.boolean().optional(),
+  phoneLogin: z.boolean().optional(),
+  emailLogin: z.boolean().optional(),
+  registrationsOpen: z.boolean().optional(),
+  postingOpen: z.boolean().optional(),
+  burningOpen: z.boolean().optional(),
+  notice: z.string().max(280, "Keep the notice under 280 characters").optional(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   burnsSentCount: true,
@@ -86,3 +114,4 @@ export type User = typeof users.$inferSelect;
 export type Pidaka = typeof pidakas.$inferSelect;
 export type Burn = typeof burns.$inferSelect;
 export type PidakaView = typeof pidakaViews.$inferSelect;
+export type WallSettingsRow = typeof wallSettings.$inferSelect;

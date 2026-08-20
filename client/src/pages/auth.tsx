@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CowDungCake } from "@/components/burning-cookie-icon";
 import { ArrowLeft, Mail } from "lucide-react";
 import { Link } from "wouter";
+import { usePublicWall } from "@/lib/wall";
 
 function formMessage(err: unknown, fallback: string) {
   const raw = err instanceof Error ? err.message : fallback;
@@ -64,6 +65,7 @@ export function AuthForm() {
   const { completeSession, authError, clearAuthError } = useAuth();
   const { toast } = useToast();
   const { hideAuth } = useAuthModal();
+  const { data: wall } = usePublicWall();
 
   useEffect(() => {
     if (!authError) return;
@@ -166,60 +168,73 @@ export function AuthForm() {
 
       {step === "choose" && (
         <div className="flex flex-col gap-2.5">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 justify-start gap-3 bg-background text-foreground border-input"
-            disabled={loading !== null}
-            onClick={() => {
-              setLoading("google");
-              window.location.href = "/api/auth/google";
-            }}
-            data-testid="button-auth-google"
-          >
-            <GoogleMark />
-            Continue with Google
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 justify-start gap-3 bg-background text-foreground border-input"
-            disabled={loading !== null}
-            onClick={() => {
-              setLoading("apple");
-              window.location.href = "/api/auth/apple";
-            }}
-            data-testid="button-auth-apple"
-          >
-            <AppleMark />
-            Continue with Apple
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 justify-start gap-3 bg-background text-foreground border-input"
-            disabled={loading !== null}
-            onClick={() => setStep("phone")}
-            data-testid="button-auth-phone"
-          >
-            <span className="inline-flex h-4 w-4 items-center justify-center text-[13px] font-semibold">+</span>
-            Continue with phone
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 justify-start gap-3 bg-background text-foreground border-input"
-            disabled={loading !== null}
-            onClick={() => {
-              setEmailMode("register");
-              setFormError(null);
-              setStep("email");
-            }}
-            data-testid="button-auth-email"
-          >
-            <Mail className="h-4 w-4" />
-            Continue with email
-          </Button>
+          {wall && !wall.google && !wall.apple && !wall.phone && !wall.email && (
+            <p className="text-center text-sm text-muted-foreground">
+              The wall is not taking anyone in tonight.
+            </p>
+          )}
+          {wall?.google && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 justify-start gap-3 bg-background text-foreground border-input"
+              disabled={loading !== null}
+              onClick={() => {
+                setLoading("google");
+                window.location.href = "/api/auth/google";
+              }}
+              data-testid="button-auth-google"
+            >
+              <GoogleMark />
+              Continue with Google
+            </Button>
+          )}
+          {wall?.apple && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 justify-start gap-3 bg-background text-foreground border-input"
+              disabled={loading !== null}
+              onClick={() => {
+                setLoading("apple");
+                window.location.href = "/api/auth/apple";
+              }}
+              data-testid="button-auth-apple"
+            >
+              <AppleMark />
+              Continue with Apple
+            </Button>
+          )}
+          {(!wall || wall.phone) && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 justify-start gap-3 bg-background text-foreground border-input"
+              disabled={loading !== null}
+              onClick={() => setStep("phone")}
+              data-testid="button-auth-phone"
+            >
+              <span className="inline-flex h-4 w-4 items-center justify-center text-[13px] font-semibold">+</span>
+              Continue with phone
+            </Button>
+          )}
+          {(!wall || wall.email) && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 justify-start gap-3 bg-background text-foreground border-input"
+              disabled={loading !== null}
+              onClick={() => {
+                setEmailMode(wall?.registrations === false ? "login" : "register");
+                setFormError(null);
+                setStep("email");
+              }}
+              data-testid="button-auth-email"
+            >
+              <Mail className="h-4 w-4" />
+              Continue with email
+            </Button>
+          )}
         </div>
       )}
 
@@ -238,8 +253,9 @@ export function AuthForm() {
               type="button"
               className={`flex-1 h-8 rounded-md text-xs uppercase tracking-[0.14em] ${
                 emailMode === "register" ? "bg-secondary text-foreground" : "text-muted-foreground"
-              }`}
-              onClick={() => setEmailMode("register")}
+              } ${wall?.registrations === false ? "opacity-40" : ""}`}
+              onClick={() => wall?.registrations !== false && setEmailMode("register")}
+              disabled={wall?.registrations === false}
               data-testid="button-email-register-mode"
             >
               Register

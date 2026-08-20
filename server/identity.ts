@@ -56,6 +56,7 @@ export async function findOrCreateAuthUser(input: {
   subject: string;
   email?: string | null;
   phone?: string | null;
+  allowCreate?: boolean;
 }): Promise<{ user: User; created: boolean }> {
   const existingAuth = await storage.getUserByAuth(input.provider, input.subject);
   if (existingAuth) return { user: existingAuth, created: false };
@@ -68,6 +69,10 @@ export async function findOrCreateAuthUser(input: {
   if (input.email) {
     const byEmail = await storage.getUserByEmail(input.email.toLowerCase());
     if (byEmail) return { user: byEmail, created: false };
+  }
+
+  if (input.allowCreate === false) {
+    throw new Error("The wall is not taking names tonight");
   }
 
   const user = await storage.createUser({
