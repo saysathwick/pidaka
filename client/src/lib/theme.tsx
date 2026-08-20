@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { useLocation } from "wouter";
 
 type Theme = "light" | "dark";
 
@@ -18,6 +19,16 @@ function isAccent(value: string | null): value is AccentId {
   return ACCENT_IDS.includes(value as AccentId);
 }
 
+function readTheme(key: string): Theme {
+  const stored = localStorage.getItem(key);
+  return stored === "dark" || stored === "light" ? stored : "dark";
+}
+
+function readAccent(key: string): AccentId {
+  const stored = localStorage.getItem(key);
+  return isAccent(stored) ? stored : "b";
+}
+
 interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
@@ -29,14 +40,15 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem("pidaka_theme");
-    return stored === "dark" || stored === "light" ? stored : "dark";
-  });
-  const [accent, setAccent] = useState<AccentId>(() => {
-    const stored = localStorage.getItem("pidaka_accent");
-    return isAccent(stored) ? stored : "b";
-  });
+  const [location] = useLocation();
+  const hearth = location === "/hearth";
+  const [wallTheme, setWallTheme] = useState<Theme>(() => readTheme("pidaka_theme"));
+  const [wallAccent, setWallAccent] = useState<AccentId>(() => readAccent("pidaka_accent"));
+  const [hearthTheme, setHearthTheme] = useState<Theme>(() => readTheme("pidaka_hearth_theme"));
+  const [hearthAccent, setHearthAccent] = useState<AccentId>(() => readAccent("pidaka_hearth_accent"));
+
+  const theme = hearth ? hearthTheme : wallTheme;
+  const accent = hearth ? hearthAccent : wallAccent;
 
   useEffect(() => {
     const root = document.documentElement;
@@ -45,23 +57,29 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } else {
       root.classList.remove("dark");
     }
-    localStorage.setItem("pidaka_theme", theme);
-  }, [theme]);
+    if (hearth) localStorage.setItem("pidaka_hearth_theme", theme);
+    else localStorage.setItem("pidaka_theme", theme);
+  }, [theme, hearth]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-accent", accent);
-    localStorage.setItem("pidaka_accent", accent);
-  }, [accent]);
+    if (hearth) localStorage.setItem("pidaka_hearth_accent", accent);
+    else localStorage.setItem("pidaka_accent", accent);
+  }, [accent, hearth]);
 
   const toggleTheme = () => {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+    const next = (prev: Theme) => (prev === "dark" ? "light" : "dark");
+    if (hearth) setHearthTheme(next);
+    else setWallTheme(next);
   };
 
   const cycleAccent = () => {
-    setAccent((current) => {
+    const next = (current: AccentId) => {
       const index = ACCENT_IDS.indexOf(current);
       return ACCENT_IDS[(index + 1) % ACCENT_IDS.length];
-    });
+    };
+    if (hearth) setHearthAccent(next);
+    else setWallAccent(next);
   };
 
   const accentName = ACCENTS.find((item) => item.id === accent)?.name ?? "Copper coal";
