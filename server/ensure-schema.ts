@@ -46,6 +46,15 @@ const statements = [
     seen_at timestamp NOT NULL DEFAULT now(),
     PRIMARY KEY (pidaka_id, viewer_id)
   )`,
+  `CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id varchar NOT NULL,
+    endpoint text NOT NULL UNIQUE,
+    p256dh text NOT NULL,
+    auth text NOT NULL,
+    created_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS push_subscriptions_user_id_idx ON push_subscriptions (user_id)`,
   `CREATE TABLE IF NOT EXISTS wall_settings (
     id varchar PRIMARY KEY,
     google_login boolean NOT NULL DEFAULT false,
@@ -58,6 +67,12 @@ const statements = [
     notice text NOT NULL DEFAULT '',
     updated_at timestamp NOT NULL DEFAULT now()
   )`,
+  `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_links text NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_open boolean NOT NULL DEFAULT true`,
+  `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_style text NOT NULL DEFAULT 'still'`,
+  `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_font text NOT NULL DEFAULT 'sans'`,
+  `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_size text NOT NULL DEFAULT 'md'`,
+  `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_color text NOT NULL DEFAULT 'muted'`,
 ];
 
 export async function ensureSchema(): Promise<void> {

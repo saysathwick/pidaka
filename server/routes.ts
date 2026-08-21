@@ -10,6 +10,8 @@ import {
   loginSchema,
   insertPidakaSchema,
   insertBurnSchema,
+  pushSubscribeSchema,
+  pushUnsubscribeSchema,
   phoneStartSchema,
   phoneVerifySchema,
   adminSessionSchema,
@@ -35,7 +37,7 @@ import {
 } from "./identity";
 import { adminMiddleware, adminSecret, secretsEqual, signAdminToken, type AdminRequest } from "./admin";
 import { readPublicWall, readWallSettings, toPublicWall } from "./wall-settings";
-import { settingsHaveADoor } from "@shared/wall";
+import { parseNoticeColor, parseNoticeFont, parseNoticeSize, parseNoticeStyle, sanitizeNoticeLinks, settingsHaveADoor } from "@shared/wall";
 import { generateAnonymousName } from "@shared/names";
 import { log } from "./index";
 import {
@@ -43,11 +45,13 @@ import {
   clearSessionCookie,
   limitAuth,
   limitHearth,
+  limitPush,
   readSessionToken,
   setHearthCookie,
   setSessionCookie,
 } from "./http-security";
 import { mailDomainLooksReal } from "./mail-domain";
+import { burnAlertsReady, notifyBurnArrived, vapidPublicKey } from "./push";
 
 if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET environment variable must be set");
@@ -187,6 +191,26 @@ export async function registerRoutes(
         ...current,
         ...parsed.data,
         notice: parsed.data.notice !== undefined ? parsed.data.notice.trim() : current.notice,
+        noticeLinks:
+          parsed.data.noticeLinks !== undefined
+            ? sanitizeNoticeLinks(parsed.data.noticeLinks)
+            : current.noticeLinks,
+        noticeStyle:
+          parsed.data.noticeStyle !== undefined
+            ? parseNoticeStyle(parsed.data.noticeStyle)
+            : current.noticeStyle,
+        noticeFont:
+          parsed.data.noticeFont !== undefined
+            ? parseNoticeFont(parsed.data.noticeFont)
+            : current.noticeFont,
+        noticeSize:
+          parsed.data.noticeSize !== undefined
+            ? parseNoticeSize(parsed.data.noticeSize)
+            : current.noticeSize,
+        noticeColor:
+          parsed.data.noticeColor !== undefined
+            ? parseNoticeColor(parsed.data.noticeColor)
+            : current.noticeColor,
       };
       if (!settingsHaveADoor(next)) {
         return res.status(400).json({ message: "Leave at least one way in" });
@@ -517,6 +541,44 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/push/vapid", (_req: Request, res: Response) => {
+    const key = vapidPublicKey();
+    if (!key || !burnAlertsReady()) {
+      return res.status(404).json({ message: "Burn alerts are not wired" });
+    }
+    return res.json({ publicKey: key });
+  });
+
+  app.post("/api/push/subscribe", limitPush, authMiddleware as any, async (req: AuthRequest, res: Response) => {
+    const parsed = pushSubscribeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0].message });
+    }
+    try {
+      await storage.savePushSubscription(req.userId!, {
+        endpoint: parsed.data.endpoint,
+        p256dh: parsed.data.keys.p256dh,
+        auth: parsed.data.keys.auth,
+      });
+      return res.json({ ok: true });
+    } catch {
+      return res.status(500).json({ message: "Could not keep this device" });
+    }
+  });
+
+  app.delete("/api/push/subscribe", limitPush, authMiddleware as any, async (req: AuthRequest, res: Response) => {
+    const parsed = pushUnsubscribeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0].message });
+    }
+    try {
+      await storage.deletePushSubscription(req.userId!, parsed.data.endpoint);
+      return res.json({ ok: true });
+    } catch {
+      return res.status(500).json({ message: "Could not drop this device" });
+    }
+  });
+
   app.get("/api/pidakas", optionalAuth as any, async (req: AuthRequest, res: Response) => {
     try {
       const viewerId = viewerIdFrom(req);
@@ -630,6 +692,8 @@ export async function registerRoutes(
         parsed.data.message
       );
       await storage.markSeen(pidakaId, req.userId!);
+      const unread = await storage.countUnreadBurns(pidaka.creatorUserId);
+      void notifyBurnArrived(pidaka.creatorUserId, unread).catch(() => {});
 
       return res.status(201).json({ id: burn.id, createdAt: burn.createdAt });
     } catch {

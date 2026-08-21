@@ -42,6 +42,14 @@ export function limitHearth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+export function limitPush(req: Request, res: Response, next: NextFunction) {
+  const key = `push:${clientKey(req)}`;
+  if (!rateLimit(key, 20, 60 * 60 * 1000)) {
+    return res.status(429).json({ message: "Too many tries. Wait a little." });
+  }
+  next();
+}
+
 export function securityHeaders(req: Request, res: Response, next: NextFunction) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
@@ -51,7 +59,7 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
     res.setHeader("Strict-Transport-Security", "max-age=15552000; includeSubDomains");
     res.setHeader(
       "Content-Security-Policy",
-      "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self'; connect-src 'self'; font-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
     );
   }
   next();

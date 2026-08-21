@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -22,7 +23,31 @@ import {
   clearHearthToken,
   hearthRequest,
 } from "@/lib/hearth";
-import type { AdminPidaka, AdminStats, AdminUser, PublicWall, WallSettings } from "@shared/wall";
+import { WallNotice } from "@/components/wall-notice";
+import { fireEmberBurst } from "@/lib/ember-burst";
+import type {
+  AdminPidaka,
+  AdminStats,
+  AdminUser,
+  NoticeColor,
+  NoticeFont,
+  NoticeLink,
+  NoticeSize,
+  NoticeStyle,
+  PublicWall,
+  WallSettings,
+} from "@shared/wall";
+import {
+  NOTICE_COLOR_LABELS,
+  NOTICE_COLORS,
+  NOTICE_FONT_LABELS,
+  NOTICE_FONTS,
+  NOTICE_SIZE_LABELS,
+  NOTICE_SIZES,
+  NOTICE_STYLE_LABELS,
+  NOTICE_STYLES,
+  sanitizeNoticeLinks,
+} from "@shared/wall";
 
 type Overview = {
   settings: WallSettings;
@@ -36,6 +61,18 @@ function excerpt(text: string, max = 140) {
   return `${trimmed.slice(0, max).trim()}…`;
 }
 
+type DraftLink = { name: string; href: string; file: boolean };
+
+function toDraftLinks(links: NoticeLink[] | undefined): DraftLink[] {
+  const rows = (links ?? []).map((link) => ({
+    name: link.name,
+    href: link.href,
+    file: Boolean(link.file),
+  }));
+  if (rows.length === 0) rows.push({ name: "", href: "", file: false });
+  return rows;
+}
+
 export default function HearthPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -46,10 +83,17 @@ export default function HearthPage() {
   const [pidakas, setPidakas] = useState<AdminPidaka[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [notice, setNotice] = useState("");
+  const [noticeLinks, setNoticeLinks] = useState<DraftLink[]>(() => toDraftLinks([]));
+  const [noticeStyle, setNoticeStyle] = useState<NoticeStyle>("still");
+  const [noticeFont, setNoticeFont] = useState<NoticeFont>("sans");
+  const [noticeSize, setNoticeSize] = useState<NoticeSize>("md");
+  const [noticeColor, setNoticeColor] = useState<NoticeColor>("muted");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [noticeKept, setNoticeKept] = useState(false);
+  const keepNoticeRef = useRef<HTMLButtonElement>(null);
 
   const load = async () => {
     setLoading(true);
@@ -61,6 +105,11 @@ export default function HearthPage() {
       ]);
       setOverview(nextOverview);
       setNotice(nextOverview.settings.notice);
+      setNoticeLinks(toDraftLinks(nextOverview.settings.noticeLinks));
+      setNoticeStyle(nextOverview.settings.noticeStyle);
+      setNoticeFont(nextOverview.settings.noticeFont);
+      setNoticeSize(nextOverview.settings.noticeSize);
+      setNoticeColor(nextOverview.settings.noticeColor);
       setPidakas(nextPidakas);
       setUsers(nextUsers);
       setOpen(true);
@@ -104,8 +153,8 @@ export default function HearthPage() {
     }
   };
 
-  const patch = async (partial: Partial<WallSettings>) => {
-    setBusy("settings");
+  const patch = async (partial: Partial<WallSettings>, kind: "settings" | "notice" = "settings") => {
+    setBusy(kind);
     try {
       const data = await hearthRequest("PATCH", "/api/admin/settings", partial) as {
         settings: WallSettings;
@@ -113,8 +162,19 @@ export default function HearthPage() {
       };
       setOverview((prev) => prev ? { ...prev, settings: data.settings, wall: data.wall } : prev);
       if (partial.notice !== undefined) setNotice(data.settings.notice);
+      if (partial.noticeLinks !== undefined) setNoticeLinks(toDraftLinks(data.settings.noticeLinks));
+      if (partial.noticeStyle !== undefined) setNoticeStyle(data.settings.noticeStyle);
+      if (partial.noticeFont !== undefined) setNoticeFont(data.settings.noticeFont);
+      if (partial.noticeSize !== undefined) setNoticeSize(data.settings.noticeSize);
+      if (partial.noticeColor !== undefined) setNoticeColor(data.settings.noticeColor);
       queryClient.invalidateQueries({ queryKey: ["/api/wall"] });
       queryClient.invalidateQueries({ queryKey: ["/api/pidakas"] });
+      if (kind === "notice") {
+        toast({ title: "The notice is on the wall" });
+        fireEmberBurst(keepNoticeRef.current);
+        setNoticeKept(true);
+        window.setTimeout(() => setNoticeKept(false), 2200);
+      }
     } catch (err) {
       toast({
         title: "Could not keep that change",
@@ -336,15 +396,45 @@ export default function HearthPage() {
                 disabled={busy === "settings"}
                 onCheckedChange={(burningOpen) => void patch({ burningOpen })}
               />
+            </section>
+
+            <section className="flex flex-col gap-4 rounded-xl border border-border bg-card/60 p-5">
+              <div>
+                <h2 className="font-serif text-2xl">Notice</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  A strip on the wall. Not a burn. Turn it off without erasing the copy.
+                </p>
+              </div>
+              <Door
+                label="Show on the wall"
+                hint="Keep the text here even when the wall is quiet."
+                checked={overview.settings.noticeOpen}
+                disabled={busy === "settings" || busy === "notice"}
+                onCheckedChange={(noticeOpen) => void patch({ noticeOpen })}
+              />
               <form
                 className="flex flex-col gap-2"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  void patch({ notice });
+                  void patch(
+                    {
+                      notice,
+                      noticeStyle,
+                      noticeFont,
+                      noticeSize,
+                      noticeColor,
+                      noticeLinks: noticeLinks.map((link) => ({
+                        name: link.name,
+                        href: link.href,
+                        file: link.file || undefined,
+                      })),
+                    },
+                    "notice",
+                  );
                 }}
               >
                 <Label htmlFor="wall-notice" className="text-xs uppercase tracking-wider">
-                  Notice on the wall
+                  Copy
                 </Label>
                 <Textarea
                   id="wall-notice"
@@ -355,8 +445,141 @@ export default function HearthPage() {
                   className="min-h-[88px] bg-background"
                   data-testid="input-wall-notice"
                 />
-                <Button type="submit" variant="secondary" className="self-start" disabled={busy === "settings"}>
-                  Keep the notice
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">How it moves</p>
+                  <ChipRow
+                    options={NOTICE_STYLES}
+                    labels={NOTICE_STYLE_LABELS}
+                    value={noticeStyle}
+                    onChange={setNoticeStyle}
+                    testId="notice-style"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Font</p>
+                  <ChipRow
+                    options={NOTICE_FONTS}
+                    labels={NOTICE_FONT_LABELS}
+                    value={noticeFont}
+                    onChange={setNoticeFont}
+                    testId="notice-font"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Size</p>
+                  <ChipRow
+                    options={NOTICE_SIZES}
+                    labels={NOTICE_SIZE_LABELS}
+                    value={noticeSize}
+                    onChange={setNoticeSize}
+                    testId="notice-size"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Colour</p>
+                  <div className="flex flex-wrap gap-2">
+                    {NOTICE_COLORS.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        className={
+                          color === noticeColor
+                            ? "inline-flex items-center gap-2 rounded-full border border-primary bg-primary/15 px-3 py-1 text-xs text-foreground"
+                            : "inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
+                        }
+                        onClick={() => setNoticeColor(color)}
+                        data-testid={`button-notice-color-${color}`}
+                      >
+                        <span className={`h-2.5 w-2.5 rounded-full notice-color-${color} bg-current`} />
+                        {NOTICE_COLOR_LABELS[color]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Links</p>
+                  {noticeLinks.map((link, index) => (
+                    <div key={index} className="flex flex-col gap-2 rounded-lg border border-border/70 p-3">
+                      <Input
+                        value={link.name}
+                        maxLength={48}
+                        placeholder="Name on the wall"
+                        onChange={(e) => {
+                          const name = e.target.value;
+                          setNoticeLinks((prev) => prev.map((row, i) => (i === index ? { ...row, name } : row)));
+                        }}
+                        data-testid={`input-wall-notice-link-name-${index}`}
+                      />
+                      <Input
+                        value={link.href}
+                        maxLength={2048}
+                        placeholder="https://…"
+                        inputMode="url"
+                        onChange={(e) => {
+                          const href = e.target.value;
+                          setNoticeLinks((prev) => prev.map((row, i) => (i === index ? { ...row, href } : row)));
+                        }}
+                        data-testid={`input-wall-notice-link-href-${index}`}
+                      />
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Checkbox
+                            checked={link.file}
+                            onCheckedChange={(checked) => {
+                              setNoticeLinks((prev) =>
+                                prev.map((row, i) => (i === index ? { ...row, file: checked === true } : row)),
+                              );
+                            }}
+                            data-testid={`input-wall-notice-link-file-${index}`}
+                          />
+                          File — download mark
+                        </label>
+                        {noticeLinks.length > 1 && (
+                          <button
+                            type="button"
+                            className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                            onClick={() => setNoticeLinks((prev) => prev.filter((_, i) => i !== index))}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {noticeLinks.length < 4 && (
+                    <button
+                      type="button"
+                      className="self-start text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                      onClick={() => setNoticeLinks((prev) => [...prev, { name: "", href: "", file: false }])}
+                      data-testid="button-wall-notice-add-link"
+                    >
+                      Add a link
+                    </button>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    https only. A .apk, .pdf, .zip and the like get the download mark on their own.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 pt-1">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Preview</p>
+                  <WallNotice
+                    notice={notice.trim() || "The wall is listening."}
+                    links={sanitizeNoticeLinks(noticeLinks)}
+                    style={noticeStyle}
+                    font={noticeFont}
+                    size={noticeSize}
+                    color={noticeColor}
+                  />
+                </div>
+                <Button
+                  ref={keepNoticeRef}
+                  type="submit"
+                  variant="secondary"
+                  className="self-start"
+                  disabled={busy === "settings" || busy === "notice"}
+                  data-testid="button-keep-notice"
+                >
+                  {busy === "notice" ? "Keeping..." : noticeKept ? "Kept." : "Keep the notice"}
                 </Button>
               </form>
             </section>
@@ -458,6 +681,40 @@ function Door({
         onCheckedChange={onCheckedChange}
         aria-label={label}
       />
+    </div>
+  );
+}
+
+function ChipRow<T extends string>({
+  options,
+  labels,
+  value,
+  onChange,
+  testId,
+}: {
+  options: readonly T[];
+  labels: Record<T, string>;
+  value: T;
+  onChange: (value: T) => void;
+  testId: string;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          className={
+            option === value
+              ? "rounded-full border border-primary bg-primary/15 px-3 py-1 text-xs text-foreground"
+              : "rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
+          }
+          onClick={() => onChange(option)}
+          data-testid={`button-${testId}-${option}`}
+        >
+          {labels[option]}
+        </button>
+      ))}
     </div>
   );
 }

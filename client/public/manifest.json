@@ -1,0 +1,18 @@
+{
+  "name": "Pidaka",
+  "short_name": "Pidaka",
+  "description": "Anonymous opinions from strangers. No identity. No followers. Just truth.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#070709",
+  "theme_color": "#070709",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

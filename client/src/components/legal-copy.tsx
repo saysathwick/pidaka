@@ -70,6 +70,11 @@ export function PrivacyCopy() {
             read it.
           </li>
           <li>
+            <span className="font-medium text-foreground">Burn alerts.</span> If
+            you allow notifications, this device’s push address so we can tell you
+            a burn arrived. The notice does not contain the burn or your pidaka.
+          </li>
+          <li>
             <span className="font-medium text-foreground">This device only.</span>{" "}
             Theme and accent choices in local storage. We do not receive those.
           </li>
@@ -87,8 +92,9 @@ export function PrivacyCopy() {
       <LegalSection title="How we use it">
         <p>
           To name you, to show the wall, to deliver pidakas to other people, to
-          carry burns to the right inbox, to keep you signed in, and to stop abuse
-          of the service. We do not use wall text to train public models.
+          carry burns to the right inbox, to tell a device you allowed that a burn
+          arrived, to keep you signed in, and to stop abuse of the service. We do
+          not use wall text to train public models.
         </p>
       </LegalSection>
 
@@ -106,8 +112,10 @@ export function PrivacyCopy() {
         <p>
           Strangers see pidaka text without your name. The person you burn sees the
           burn, not you. We may use Google, Apple, or a phone provider to sign you
-          in, and a host and database to run the app. Those processors see what
-          they need to do that job. We do not sell your account or your pidakas.
+          in, a host and database to run the app, and — only if you turn on burn
+          alerts — the browser’s push service to deliver that notice. Those
+          processors see what they need to do that job. The alert itself does not
+          include the burn text. We do not sell your account or your pidakas.
         </p>
       </LegalSection>
 
@@ -121,10 +129,11 @@ export function PrivacyCopy() {
 
       <LegalSection title="Your choices">
         <p>
-          You can leave the wall from the header. Write to {OPERATOR.email} to
-          delete your account and the pidakas still tied to it. We will say when it
-          is done. Some records may remain for a short time in backups or where the
-          law requires it.
+          You can leave the wall from the header. That also drops burn alerts for
+          this device. You can refuse notifications in the browser. Write to{" "}
+          {OPERATOR.email} to delete your account and the pidakas still tied to it.
+          We will say when it is done. Some records may remain for a short time in
+          backups or where the law requires it.
         </p>
       </LegalSection>
 
