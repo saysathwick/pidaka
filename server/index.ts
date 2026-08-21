@@ -7,6 +7,7 @@ import { isDemoMode } from "./db";
 import { ensureSchema } from "./ensure-schema";
 import { securityHeaders } from "./http-security";
 import { migrateVault } from "./vault";
+import { burnAlertsReady } from "./push";
 
 const app = express();
 const httpServer = createServer(app);
@@ -100,6 +101,9 @@ app.use((req, res, next) => {
     }
     if (!process.env.ADMIN_SECRET?.trim()) {
       log("ADMIN_SECRET is unset — /hearth is locked", "hearth");
+    }
+    if (burnAlertsReady()) {
+      log("burn alerts armed", "push");
     }
   });
 })();

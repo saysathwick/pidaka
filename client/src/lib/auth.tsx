@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { dropBurnSubscription } from "@/lib/push-client";
 
 interface UserData {
   anonymousName: string;
@@ -103,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     localStorage.removeItem("pidaka_token");
+    await dropBurnSubscription();
     try {
       await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     } catch {

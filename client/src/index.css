@@ -416,6 +416,64 @@ html.dark[data-accent="e"] {
   40% { opacity: 1; transform: scale(1); }
 }
 
+@keyframes notice-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.12; }
+}
+
+@keyframes notice-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@keyframes notice-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.notice-blink {
+  animation: notice-blink 1.1s steps(1, end) infinite;
+}
+
+.notice-pulse {
+  animation: notice-pulse 2.2s ease-in-out infinite;
+}
+
+.notice-scroll {
+  width: 100%;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+
+.notice-scroll-track {
+  display: flex;
+  width: max-content;
+  gap: 3rem;
+  animation: notice-scroll 14s linear infinite;
+}
+
+.notice-scroll-track span {
+  flex: none;
+}
+
+.notice-font-sans { font-family: var(--font-sans); }
+.notice-font-serif { font-family: var(--font-serif); }
+.notice-font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.notice-size-sm { font-size: 0.875rem; }
+.notice-size-md { font-size: 1rem; }
+.notice-size-lg { font-size: 1.25rem; line-height: 1.4; }
+.notice-size-xl { font-size: 1.6rem; line-height: 1.3; }
+
+.notice-color-muted { color: hsl(var(--muted-foreground)); }
+.notice-color-ember { color: hsl(var(--primary)); }
+.notice-color-snow { color: hsl(var(--foreground)); }
+.notice-color-copper { color: #c45c26; }
+.notice-color-ochre { color: #c4a35a; }
+.notice-color-wine { color: #b44a58; }
+.notice-color-indigo { color: #7b88c9; }
+.notice-color-blue { color: #3b82f6; }
+
 .pidaka-more-dot {
   width: 5px;
   height: 5px;
@@ -443,7 +501,10 @@ html.dark[data-accent="e"] {
   .ember-spark,
   .ember-breathe,
   .fuse-dying,
-  .pidaka-more-dot {
+  .pidaka-more-dot,
+  .notice-blink,
+  .notice-pulse,
+  .notice-scroll-track {
     animation: none;
   }
 }

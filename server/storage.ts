@@ -7,13 +7,14 @@ import {
   pidakas,
   burns,
   pidakaViews,
+  pushSubscriptions,
   wallSettings,
   type User,
   type InsertUser,
   type Pidaka,
   type Burn,
 } from "@shared/schema";
-import { WALL_SETTINGS_ID, type WallSettings } from "@shared/wall";
+import { parseNoticeColor, parseNoticeFont, parseNoticeLinks, parseNoticeSize, parseNoticeStyle, WALL_SETTINGS_ID, type WallSettings } from "@shared/wall";
 import { blind, isBlind, seal } from "./crypto";
 import { revealBurn, revealPidaka, revealUser, vaultUserInsert } from "./vault";
 
@@ -40,6 +41,11 @@ export interface IStorage {
   getSeenIds(viewerId: string): Promise<string[]>;
   markSeen(pidakaId: string, viewerId: string): Promise<void>;
   getWitnessCounts(): Promise<Record<string, number>>;
+
+  savePushSubscription(userId: string, sub: { endpoint: string; p256dh: string; auth: string }): Promise<void>;
+  listPushSubscriptions(userId: string): Promise<Array<{ endpoint: string; p256dh: string; auth: string }>>;
+  deletePushSubscription(userId: string, endpoint: string): Promise<void>;
+  deletePushSubscriptionByEndpoint(endpoint: string): Promise<void>;
 
   getWallSettings(seed: WallSettings): Promise<WallSettings>;
   saveWallSettings(next: WallSettings): Promise<WallSettings>;
@@ -231,6 +237,51 @@ export class DatabaseStorage implements IStorage {
       .onConflictDoNothing();
   }
 
+  async savePushSubscription(userId: string, sub: { endpoint: string; p256dh: string; auth: string }) {
+    await db
+      .insert(pushSubscriptions)
+      .values({
+        userId,
+        endpoint: sub.endpoint,
+        p256dh: sub.p256dh,
+        auth: sub.auth,
+      })
+      .onConflictDoUpdate({
+        target: pushSubscriptions.endpoint,
+        set: { userId, p256dh: sub.p256dh, auth: sub.auth, createdAt: new Date() },
+      });
+    const kept = await db
+      .select({ id: pushSubscriptions.id })
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, userId))
+      .orderBy(desc(pushSubscriptions.createdAt));
+    const extra = kept.slice(8).map((row) => row.id);
+    if (extra.length > 0) {
+      await db.delete(pushSubscriptions).where(inArray(pushSubscriptions.id, extra));
+    }
+  }
+
+  async listPushSubscriptions(userId: string) {
+    return db
+      .select({
+        endpoint: pushSubscriptions.endpoint,
+        p256dh: pushSubscriptions.p256dh,
+        auth: pushSubscriptions.auth,
+      })
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, userId));
+  }
+
+  async deletePushSubscription(userId: string, endpoint: string) {
+    await db
+      .delete(pushSubscriptions)
+      .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)));
+  }
+
+  async deletePushSubscriptionByEndpoint(endpoint: string) {
+    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+  }
+
   async getWitnessCounts(): Promise<Record<string, number>> {
     const live = await db
       .select({ id: pidakas.id })
@@ -266,7 +317,7 @@ export class DatabaseStorage implements IStorage {
     if (row) return fromRow(row);
     const [created] = await db
       .insert(wallSettings)
-      .values({ id: WALL_SETTINGS_ID, ...seed })
+      .values({ id: WALL_SETTINGS_ID, ...toSettingsRow(seed) })
       .onConflictDoNothing()
       .returning();
     if (created) return fromRow(created);
@@ -277,10 +328,10 @@ export class DatabaseStorage implements IStorage {
   async saveWallSettings(next: WallSettings): Promise<WallSettings> {
     const [row] = await db
       .insert(wallSettings)
-      .values({ id: WALL_SETTINGS_ID, ...next, updatedAt: new Date() })
+      .values({ id: WALL_SETTINGS_ID, ...toSettingsRow(next), updatedAt: new Date() })
       .onConflictDoUpdate({
         target: wallSettings.id,
-        set: { ...next, updatedAt: new Date() },
+        set: { ...toSettingsRow(next), updatedAt: new Date() },
       })
       .returning();
     return fromRow(row);
@@ -339,6 +390,25 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
+function toSettingsRow(next: WallSettings) {
+  return {
+    googleLogin: next.googleLogin,
+    appleLogin: next.appleLogin,
+    phoneLogin: next.phoneLogin,
+    emailLogin: next.emailLogin,
+    registrationsOpen: next.registrationsOpen,
+    postingOpen: next.postingOpen,
+    burningOpen: next.burningOpen,
+    noticeOpen: next.noticeOpen,
+    notice: next.notice,
+    noticeLinks: JSON.stringify(parseNoticeLinks(next.noticeLinks)),
+    noticeStyle: parseNoticeStyle(next.noticeStyle),
+    noticeFont: parseNoticeFont(next.noticeFont),
+    noticeSize: parseNoticeSize(next.noticeSize),
+    noticeColor: parseNoticeColor(next.noticeColor),
+  };
+}
+
 function fromRow(row: {
   googleLogin: boolean;
   appleLogin: boolean;
@@ -347,7 +417,13 @@ function fromRow(row: {
   registrationsOpen: boolean;
   postingOpen: boolean;
   burningOpen: boolean;
+  noticeOpen?: boolean | null;
   notice: string;
+  noticeLinks?: unknown;
+  noticeStyle?: unknown;
+  noticeFont?: unknown;
+  noticeSize?: unknown;
+  noticeColor?: unknown;
 }): WallSettings {
   return {
     googleLogin: row.googleLogin,
@@ -357,7 +433,13 @@ function fromRow(row: {
     registrationsOpen: row.registrationsOpen,
     postingOpen: row.postingOpen,
     burningOpen: row.burningOpen,
+    noticeOpen: row.noticeOpen !== false,
     notice: row.notice,
+    noticeLinks: parseNoticeLinks(row.noticeLinks),
+    noticeStyle: parseNoticeStyle(row.noticeStyle),
+    noticeFont: parseNoticeFont(row.noticeFont),
+    noticeSize: parseNoticeSize(row.noticeSize),
+    noticeColor: parseNoticeColor(row.noticeColor),
   };
 }
 

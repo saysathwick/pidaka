@@ -71,6 +71,7 @@ export class DemoStorage implements IStorage {
   private pidakas: Pidaka[] = seedDemoPidakas();
   private burns: Burn[] = [];
   private views = new Map<string, Set<string>>();
+  private pushes: Array<{ userId: string; endpoint: string; p256dh: string; auth: string; createdAt: Date }> = [];
 
   async getUser(id: string) {
     const user = this.users.get(id);
@@ -241,6 +242,30 @@ export class DemoStorage implements IStorage {
     this.views.set(viewerId, set);
   }
 
+  async savePushSubscription(userId: string, sub: { endpoint: string; p256dh: string; auth: string }) {
+    this.pushes = this.pushes.filter((row) => row.endpoint !== sub.endpoint);
+    this.pushes.unshift({ userId, ...sub, createdAt: new Date() });
+    const mine = this.pushes.filter((row) => row.userId === userId);
+    if (mine.length > 8) {
+      const drop = new Set(mine.slice(8).map((row) => row.endpoint));
+      this.pushes = this.pushes.filter((row) => !drop.has(row.endpoint));
+    }
+  }
+
+  async listPushSubscriptions(userId: string) {
+    return this.pushes
+      .filter((row) => row.userId === userId)
+      .map(({ endpoint, p256dh, auth }) => ({ endpoint, p256dh, auth }));
+  }
+
+  async deletePushSubscription(userId: string, endpoint: string) {
+    this.pushes = this.pushes.filter((row) => !(row.userId === userId && row.endpoint === endpoint));
+  }
+
+  async deletePushSubscriptionByEndpoint(endpoint: string) {
+    this.pushes = this.pushes.filter((row) => row.endpoint !== endpoint);
+  }
+
   async getWitnessCounts() {
     const counts: Record<string, number> = {};
     for (const seen of Array.from(this.views.values())) {
@@ -263,12 +288,38 @@ export class DemoStorage implements IStorage {
   }
 
   async getWallSettings(seed: WallSettings) {
-    if (!this.wall) this.wall = { ...seed };
-    return { ...this.wall };
+    if (!this.wall) {
+      this.wall = {
+        ...seed,
+        noticeLinks: seed.noticeLinks ?? [],
+        noticeStyle: seed.noticeStyle ?? "still",
+        noticeFont: seed.noticeFont ?? "sans",
+        noticeSize: seed.noticeSize ?? "md",
+        noticeColor: seed.noticeColor ?? "muted",
+        noticeOpen: seed.noticeOpen ?? true,
+      };
+    }
+    return {
+      ...this.wall,
+      noticeLinks: this.wall.noticeLinks ?? [],
+      noticeStyle: this.wall.noticeStyle ?? "still",
+      noticeFont: this.wall.noticeFont ?? "sans",
+      noticeSize: this.wall.noticeSize ?? "md",
+      noticeColor: this.wall.noticeColor ?? "muted",
+      noticeOpen: this.wall.noticeOpen ?? true,
+    };
   }
 
   async saveWallSettings(next: WallSettings) {
-    this.wall = { ...next };
+    this.wall = {
+      ...next,
+      noticeLinks: next.noticeLinks ?? [],
+      noticeStyle: next.noticeStyle ?? "still",
+      noticeFont: next.noticeFont ?? "sans",
+      noticeSize: next.noticeSize ?? "md",
+      noticeColor: next.noticeColor ?? "muted",
+      noticeOpen: next.noticeOpen ?? true,
+    };
     return { ...this.wall };
   }
 

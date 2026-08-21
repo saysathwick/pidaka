@@ -13,6 +13,7 @@ import { ComposeFab, ComposeOverlay, PidakaComposer } from "@/components/pidaka-
 import { BurnRitual } from "@/components/burn-ritual";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePublicWall } from "@/lib/wall";
+import { WallNotice } from "@/components/wall-notice";
 
 export default function WallPage() {
   const { user, refreshUser } = useAuth();
@@ -165,10 +166,15 @@ export default function WallPage() {
   return (
     <SiteShell place="wall" fetching={isFetching && !isLoading} paddedFooter>
       <main className="max-w-6xl mx-auto px-4 pt-6 pb-28 sm:pb-12 flex flex-col gap-5">
-        {wall?.notice && (
-          <p className="max-w-2xl mx-auto md:mx-0 text-sm leading-relaxed text-muted-foreground border border-border/70 rounded-xl px-4 py-3">
-            {wall.notice}
-          </p>
+        {wall && wall.noticeOpen && (wall.notice || wall.noticeLinks.length > 0) && (
+          <WallNotice
+            notice={wall.notice}
+            links={wall.noticeLinks}
+            style={wall.noticeStyle}
+            font={wall.noticeFont}
+            size={wall.noticeSize}
+            color={wall.noticeColor}
+          />
         )}
         <div ref={composerRef} className="max-w-2xl mx-auto md:mx-0 md:max-w-none">
           {user && wall && !wall.posting ? (

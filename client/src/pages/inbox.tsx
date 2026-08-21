@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
+import { useBurnAlerts } from "@/lib/burn-alerts";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SiteShell } from "@/components/site-shell";
@@ -29,6 +30,29 @@ interface PidakaThread {
 
 interface InboxResponse {
   threads: PidakaThread[];
+}
+
+function BurnAlertHint() {
+  const { supported, permission, prompt, enable, busy } = useBurnAlerts();
+  if (!supported || permission === "granted" || prompt) return null;
+  if (permission === "denied") {
+    return (
+      <p className="text-xs text-muted-foreground" data-testid="text-burn-alert-blocked">
+        This browser blocked alerts. Allow Pidaka in site settings to hear burns.
+      </p>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="w-fit text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+      disabled={busy}
+      onClick={() => void enable()}
+      data-testid="button-burn-alert-inbox"
+    >
+      Hear burns on this device
+    </button>
+  );
 }
 
 export default function InboxPage() {
@@ -63,9 +87,12 @@ export default function InboxPage() {
     <SiteShell place="burns" fetching={isFetching && !isLoading}>
       <main className="max-w-2xl mx-auto px-4 py-5 flex flex-col gap-6">
         {user && !isLoading && (
-          <p className="text-xs text-muted-foreground" data-testid="text-inbox-count">
-            <span className="font-semibold text-foreground">{user.burnsReceivedCount}</span> received. They will not know it was you.
-          </p>
+          <div className="flex flex-col gap-1">
+            <p className="text-xs text-muted-foreground" data-testid="text-inbox-count">
+              <span className="font-semibold text-foreground">{user.burnsReceivedCount}</span> received. They will not know it was you.
+            </p>
+            <BurnAlertHint />
+          </div>
         )}
         {isLoading ? (
           <div className="flex flex-col gap-3">

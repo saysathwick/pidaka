@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { AuthModalProvider, useAuthModal } from "@/lib/auth-modal";
 import { ThemeProvider } from "@/lib/theme";
+import { BurnAlertProvider } from "@/lib/burn-alerts";
 import { AuthDialog } from "@/pages/auth";
 import WallPage from "@/pages/wall";
 import InboxPage from "@/pages/inbox";
@@ -107,9 +108,11 @@ function App() {
         <ThemeProvider>
           <AuthProvider>
             <AuthModalProvider>
-              <div className="pointer-events-none fixed inset-0 z-[80] film-grain opacity-[0.07] mix-blend-overlay" />
-              <AppContent />
-              <Toaster />
+              <BurnAlertProvider>
+                <div className="pointer-events-none fixed inset-0 z-[80] film-grain opacity-[0.07] mix-blend-overlay" />
+                <AppContent />
+                <Toaster />
+              </BurnAlertProvider>
             </AuthModalProvider>
           </AuthProvider>
         </ThemeProvider>

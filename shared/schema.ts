@@ -49,6 +49,15 @@ export const pidakaViews = pgTable(
   }),
 );
 
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const wallSettings = pgTable("wall_settings", {
   id: varchar("id").primaryKey(),
   googleLogin: boolean("google_login").notNull().default(false),
@@ -58,7 +67,13 @@ export const wallSettings = pgTable("wall_settings", {
   registrationsOpen: boolean("registrations_open").notNull().default(true),
   postingOpen: boolean("posting_open").notNull().default(true),
   burningOpen: boolean("burning_open").notNull().default(true),
+  noticeOpen: boolean("notice_open").notNull().default(true),
   notice: text("notice").notNull().default(""),
+  noticeLinks: text("notice_links").notNull().default("[]"),
+  noticeStyle: text("notice_style").notNull().default("still"),
+  noticeFont: text("notice_font").notNull().default("sans"),
+  noticeSize: text("notice_size").notNull().default("md"),
+  noticeColor: text("notice_color").notNull().default("muted"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -115,6 +130,18 @@ export const insertBurnSchema = z.object({
   message: z.string().min(1, "Message is required").max(3000, "Maximum 3000 characters"),
 });
 
+export const pushSubscribeSchema = z.object({
+  endpoint: z.string().url().max(2048),
+  keys: z.object({
+    p256dh: z.string().min(20).max(256),
+    auth: z.string().min(8).max(256),
+  }),
+});
+
+export const pushUnsubscribeSchema = z.object({
+  endpoint: z.string().url().max(2048),
+});
+
 export const adminSessionSchema = z.object({
   secret: z.string().min(1, "Enter the hearth key"),
 });
@@ -127,7 +154,22 @@ export const wallSettingsPatchSchema = z.object({
   registrationsOpen: z.boolean().optional(),
   postingOpen: z.boolean().optional(),
   burningOpen: z.boolean().optional(),
+  noticeOpen: z.boolean().optional(),
   notice: z.string().max(280, "Keep the notice under 280 characters").optional(),
+  noticeStyle: z.enum(["still", "scroll", "blink", "pulse"]).optional(),
+  noticeFont: z.enum(["sans", "serif", "mono"]).optional(),
+  noticeSize: z.enum(["sm", "md", "lg", "xl"]).optional(),
+  noticeColor: z.enum(["muted", "ember", "snow", "copper", "ochre", "wine", "indigo", "blue"]).optional(),
+  noticeLinks: z
+    .array(
+      z.object({
+        name: z.string().max(48),
+        href: z.string().max(2048),
+        file: z.boolean().optional(),
+      }),
+    )
+    .max(4)
+    .optional(),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -143,3 +185,4 @@ export type Pidaka = typeof pidakas.$inferSelect;
 export type Burn = typeof burns.$inferSelect;
 export type PidakaView = typeof pidakaViews.$inferSelect;
 export type WallSettingsRow = typeof wallSettings.$inferSelect;
+export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
