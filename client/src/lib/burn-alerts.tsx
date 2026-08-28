@@ -1,7 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
+import { renderBurnAlert } from "@shared/burn-alert";
 import { useAuth } from "@/lib/auth";
 import { queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { usePublicWall } from "@/lib/wall";
 import {
   attachNativePushListeners,
   nativePushAlertsReady,
@@ -9,6 +12,7 @@ import {
   nativePushSupported,
   registerNativePush,
   syncNativePush,
+  type BurnAlertNotice,
 } from "@/lib/native-push";
 import {
   persistSubscription,
@@ -34,9 +38,12 @@ const BurnAlertContext = createContext<BurnAlertContextType | null>(null);
 
 export function BurnAlertProvider({ children }: { children: ReactNode }) {
   const { user, refreshUser } = useAuth();
+  const { data: wall } = usePublicWall();
+  const { toast } = useToast();
   const [, navigate] = useLocation();
   const isNative = nativePushSupported();
   const supported = isNative || webPushSupported();
+  const prevUnread = useRef<number | null>(null);
   const [permission, setPermission] = useState<Permission>(() =>
     supported && !isNative && typeof Notification !== "undefined"
       ? Notification.permission
@@ -45,10 +52,52 @@ export function BurnAlertProvider({ children }: { children: ReactNode }) {
   const [prompt, setPrompt] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const showInAppBurnAlert = useCallback(
+    (alert: BurnAlertNotice) => {
+      if (document.visibilityState !== "visible") return;
+      const unread = Number.isFinite(alert.n) ? Math.max(1, alert.n!) : user?.unreadCount ?? 1;
+      const rendered =
+        alert.title && alert.body
+          ? { title: alert.title, body: alert.body }
+          : wall
+            ? renderBurnAlert(wall, unread)
+            : { title: "Pidaka", body: "A burn arrived." };
+      toast({
+        title: rendered.title,
+        description: rendered.body,
+      });
+    },
+    [toast, user?.unreadCount, wall],
+  );
+
   const refreshBurnData = useCallback(() => {
     void refreshUser();
     void queryClient.invalidateQueries({ queryKey: ["/api/burns/inbox"] });
   }, [refreshUser]);
+
+  const handleBurnArrived = useCallback(
+    (alert: BurnAlertNotice = {}) => {
+      if (Number.isFinite(alert.n)) {
+        prevUnread.current = Math.max(alert.n!, prevUnread.current ?? 0);
+      }
+      refreshBurnData();
+      showInAppBurnAlert(alert);
+    },
+    [refreshBurnData, showInAppBurnAlert],
+  );
+
+  useEffect(() => {
+    if (!user) {
+      prevUnread.current = null;
+      return;
+    }
+    const current = user.unreadCount ?? 0;
+    const pushActive = supported && permission === "granted";
+    if (prevUnread.current !== null && current > prevUnread.current && !pushActive) {
+      handleBurnArrived({ n: current });
+    }
+    prevUnread.current = current;
+  }, [user, user?.unreadCount, handleBurnArrived, permission, supported]);
 
   const syncWeb = useCallback(async () => {
     if (!webPushSupported() || !user) {
@@ -138,7 +187,7 @@ export function BurnAlertProvider({ children }: { children: ReactNode }) {
       let cleanup = () => {};
       void (async () => {
         const remove = await attachNativePushListeners({
-          onBurn: refreshBurnData,
+          onBurn: handleBurnArrived,
           onOpenInbox: () => {
             navigate("/inbox");
             refreshBurnData();
@@ -158,7 +207,11 @@ export function BurnAlertProvider({ children }: { children: ReactNode }) {
 
     const onMessage = (event: MessageEvent) => {
       if (event.data?.kind !== "burn") return;
-      refreshBurnData();
+      handleBurnArrived({
+        title: event.data.title,
+        body: event.data.body,
+        n: event.data.n,
+      });
     };
     navigator.serviceWorker.addEventListener("message", onMessage);
     const onVisible = () => {
@@ -169,7 +222,7 @@ export function BurnAlertProvider({ children }: { children: ReactNode }) {
       navigator.serviceWorker.removeEventListener("message", onMessage);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [user, supported, isNative, refreshBurnData, refreshUser, navigate]);
+  }, [user, supported, isNative, handleBurnArrived, refreshBurnData, refreshUser, navigate]);
 
   const enable = useCallback(async () => {
     if (!supported || busy) return;

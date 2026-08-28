@@ -82,6 +82,9 @@ export const wallSettings = pgTable("wall_settings", {
   noticeFont: text("notice_font").notNull().default("sans"),
   noticeSize: text("notice_size").notNull().default("md"),
   noticeColor: text("notice_color").notNull().default("muted"),
+  burnAlertTitle: text("burn_alert_title").notNull().default("Pidaka"),
+  burnAlertBodyOne: text("burn_alert_body_one").notNull().default("A burn arrived."),
+  burnAlertBodyMany: text("burn_alert_body_many").notNull().default("{n} burns are waiting."),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -187,6 +190,9 @@ export const wallSettingsPatchSchema = z.object({
     )
     .max(4)
     .optional(),
+  burnAlertTitle: z.string().max(48).optional(),
+  burnAlertBodyOne: z.string().max(120).optional(),
+  burnAlertBodyMany: z.string().max(120).optional(),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({

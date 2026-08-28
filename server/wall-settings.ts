@@ -2,6 +2,7 @@ import { appleConfigured, demoOAuthEnabled, googleConfigured } from "./identity"
 import { storage } from "./storage";
 import type { PublicWall, WallSettings } from "@shared/wall";
 import { parseNoticeColor, parseNoticeFont, parseNoticeSize, parseNoticeStyle, sanitizeNoticeLinks } from "@shared/wall";
+import { burnAlertFromSettings, defaultBurnAlertTemplate } from "@shared/burn-alert";
 
 export function seedWallSettings(): WallSettings {
   const socialOk = demoOAuthEnabled();
@@ -20,6 +21,7 @@ export function seedWallSettings(): WallSettings {
     noticeFont: "sans",
     noticeSize: "md",
     noticeColor: "muted",
+    ...defaultBurnAlertTemplate(),
   };
 }
 
@@ -41,6 +43,7 @@ export function toPublicWall(settings: WallSettings): PublicWall {
     noticeFont: parseNoticeFont(settings.noticeFont),
     noticeSize: parseNoticeSize(settings.noticeSize),
     noticeColor: parseNoticeColor(settings.noticeColor),
+    ...burnAlertFromSettings(settings),
     googleReady,
     appleReady,
   };

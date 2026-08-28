@@ -1,8 +1,10 @@
 import { createECDH, createHash } from "node:crypto";
 import webpush from "web-push";
 import { OPERATOR } from "@shared/site";
+import { burnAlertPayload } from "@shared/burn-alert";
 import { storage } from "./storage";
 import { fcmReady, notifyBurnViaFcm } from "./fcm";
+import { readWallSettings } from "./wall-settings";
 
 function urlSafe(buf: Buffer) {
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -56,6 +58,8 @@ export function burnAlertsReady() {
 }
 
 export async function notifyBurnArrived(userId: string, unread: number) {
+  const settings = await readWallSettings();
+  const payload = burnAlertPayload(settings, unread);
   const tasks: Promise<void>[] = [];
 
   if (keys) {
@@ -63,7 +67,6 @@ export async function notifyBurnArrived(userId: string, unread: number) {
       (async () => {
         const subs = await storage.listPushSubscriptions(userId);
         if (subs.length === 0) return;
-        const payload = JSON.stringify({ kind: "burn", n: Math.max(1, unread) });
         await Promise.all(
           subs.map(async (sub) => {
             try {
@@ -72,7 +75,7 @@ export async function notifyBurnArrived(userId: string, unread: number) {
                   endpoint: sub.endpoint,
                   keys: { p256dh: sub.p256dh, auth: sub.auth },
                 },
-                payload,
+                JSON.stringify(payload),
                 { TTL: 12 * 60 * 60, urgency: "high" },
               );
             } catch (err) {
@@ -87,6 +90,6 @@ export async function notifyBurnArrived(userId: string, unread: number) {
     );
   }
 
-  tasks.push(notifyBurnViaFcm(userId, unread));
+  tasks.push(notifyBurnViaFcm(userId, payload));
   await Promise.all(tasks);
 }

@@ -50,6 +50,7 @@ import {
   NOTICE_STYLES,
   sanitizeNoticeLinks,
 } from "@shared/wall";
+import { defaultBurnAlertTemplate } from "@shared/burn-alert";
 
 type Overview = {
   settings: WallSettings;
@@ -90,6 +91,9 @@ export default function HearthPage() {
   const [noticeFont, setNoticeFont] = useState<NoticeFont>("sans");
   const [noticeSize, setNoticeSize] = useState<NoticeSize>("md");
   const [noticeColor, setNoticeColor] = useState<NoticeColor>("muted");
+  const [burnAlertTitle, setBurnAlertTitle] = useState(defaultBurnAlertTemplate().burnAlertTitle);
+  const [burnAlertBodyOne, setBurnAlertBodyOne] = useState(defaultBurnAlertTemplate().burnAlertBodyOne);
+  const [burnAlertBodyMany, setBurnAlertBodyMany] = useState(defaultBurnAlertTemplate().burnAlertBodyMany);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [leaveOpen, setLeaveOpen] = useState(false);
@@ -112,6 +116,9 @@ export default function HearthPage() {
       setNoticeFont(nextOverview.settings.noticeFont);
       setNoticeSize(nextOverview.settings.noticeSize);
       setNoticeColor(nextOverview.settings.noticeColor);
+      setBurnAlertTitle(nextOverview.settings.burnAlertTitle ?? defaultBurnAlertTemplate().burnAlertTitle);
+      setBurnAlertBodyOne(nextOverview.settings.burnAlertBodyOne ?? defaultBurnAlertTemplate().burnAlertBodyOne);
+      setBurnAlertBodyMany(nextOverview.settings.burnAlertBodyMany ?? defaultBurnAlertTemplate().burnAlertBodyMany);
       setPidakas(nextPidakas);
       setUsers(nextUsers);
       setOpen(true);
@@ -155,7 +162,7 @@ export default function HearthPage() {
     }
   };
 
-  const patch = async (partial: Partial<WallSettings>, kind: "settings" | "notice" = "settings") => {
+  const patch = async (partial: Partial<WallSettings>, kind: "settings" | "notice" | "burn-alerts" = "settings") => {
     setBusy(kind);
     try {
       const data = await hearthRequest("PATCH", "/api/admin/settings", partial) as {
@@ -169,6 +176,9 @@ export default function HearthPage() {
       if (partial.noticeFont !== undefined) setNoticeFont(data.settings.noticeFont);
       if (partial.noticeSize !== undefined) setNoticeSize(data.settings.noticeSize);
       if (partial.noticeColor !== undefined) setNoticeColor(data.settings.noticeColor);
+      if (partial.burnAlertTitle !== undefined) setBurnAlertTitle(data.settings.burnAlertTitle);
+      if (partial.burnAlertBodyOne !== undefined) setBurnAlertBodyOne(data.settings.burnAlertBodyOne);
+      if (partial.burnAlertBodyMany !== undefined) setBurnAlertBodyMany(data.settings.burnAlertBodyMany);
       queryClient.invalidateQueries({ queryKey: ["/api/wall"] });
       queryClient.invalidateQueries({ queryKey: ["/api/pidakas"] });
       if (kind === "notice") {
@@ -176,6 +186,9 @@ export default function HearthPage() {
         fireEmberBurst(keepNoticeRef.current);
         setNoticeKept(true);
         window.setTimeout(() => setNoticeKept(false), 2200);
+      }
+      if (kind === "burn-alerts") {
+        toast({ title: "Burn alerts updated" });
       }
     } catch (err) {
       toast({
@@ -407,6 +420,78 @@ export default function HearthPage() {
                 disabled={busy === "settings"}
                 onCheckedChange={(burningOpen) => void patch({ burningOpen })}
               />
+            </section>
+
+            <section className="flex flex-col gap-4 rounded-xl border border-border bg-card/60 p-5">
+              <div>
+                <h2 className="font-serif text-2xl">Burn notifications</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Push and in-app alerts when a burn lands. Use {"{n}"} for the unread count. The message never quotes the burn.
+                </p>
+              </div>
+              <form
+                className="flex flex-col gap-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void patch(
+                    {
+                      burnAlertTitle,
+                      burnAlertBodyOne,
+                      burnAlertBodyMany,
+                    },
+                    "burn-alerts",
+                  );
+                }}
+              >
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="burn-alert-title" className="text-xs uppercase tracking-wider">
+                    Title
+                  </Label>
+                  <Input
+                    id="burn-alert-title"
+                    value={burnAlertTitle}
+                    onChange={(e) => setBurnAlertTitle(e.target.value)}
+                    maxLength={48}
+                    className="bg-background"
+                    data-testid="input-burn-alert-title"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="burn-alert-body-one" className="text-xs uppercase tracking-wider">
+                    One burn
+                  </Label>
+                  <Input
+                    id="burn-alert-body-one"
+                    value={burnAlertBodyOne}
+                    onChange={(e) => setBurnAlertBodyOne(e.target.value)}
+                    maxLength={120}
+                    className="bg-background"
+                    data-testid="input-burn-alert-body-one"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="burn-alert-body-many" className="text-xs uppercase tracking-wider">
+                    Many burns
+                  </Label>
+                  <Input
+                    id="burn-alert-body-many"
+                    value={burnAlertBodyMany}
+                    onChange={(e) => setBurnAlertBodyMany(e.target.value)}
+                    maxLength={120}
+                    placeholder="{n} burns are waiting."
+                    className="bg-background"
+                    data-testid="input-burn-alert-body-many"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={busy === "burn-alerts"}
+                  className="w-fit"
+                  data-testid="button-save-burn-alerts"
+                >
+                  {busy === "burn-alerts" ? "Saving..." : "Keep alerts"}
+                </Button>
+              </form>
             </section>
 
             <section className="flex flex-col gap-4 rounded-xl border border-border bg-card/60 p-5">

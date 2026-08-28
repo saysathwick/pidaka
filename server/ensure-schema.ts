@@ -81,6 +81,9 @@ const statements = [
   `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_font text NOT NULL DEFAULT 'sans'`,
   `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_size text NOT NULL DEFAULT 'md'`,
   `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_color text NOT NULL DEFAULT 'muted'`,
+  `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS burn_alert_title text NOT NULL DEFAULT 'Pidaka'`,
+  `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS burn_alert_body_one text NOT NULL DEFAULT 'A burn arrived.'`,
+  `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS burn_alert_body_many text NOT NULL DEFAULT '{n} burns are waiting.'`,
 ];
 
 export async function ensureSchema(): Promise<void> {

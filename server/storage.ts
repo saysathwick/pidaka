@@ -2,6 +2,7 @@ import { eq, desc, lt, sql, and, inArray } from "drizzle-orm";
 import { db, isDemoMode } from "./db";
 import { DemoStorage } from "./demo-storage";
 import { excerptPidaka } from "@shared/names";
+import { burnAlertFromSettings, sanitizeBurnAlertBodyMany, sanitizeBurnAlertBodyOne, sanitizeBurnAlertTitle } from "@shared/burn-alert";
 import {
   users,
   pidakas,
@@ -448,6 +449,9 @@ function toSettingsRow(next: WallSettings) {
     noticeFont: parseNoticeFont(next.noticeFont),
     noticeSize: parseNoticeSize(next.noticeSize),
     noticeColor: parseNoticeColor(next.noticeColor),
+    burnAlertTitle: sanitizeBurnAlertTitle(next.burnAlertTitle),
+    burnAlertBodyOne: sanitizeBurnAlertBodyOne(next.burnAlertBodyOne),
+    burnAlertBodyMany: sanitizeBurnAlertBodyMany(next.burnAlertBodyMany),
   };
 }
 
@@ -466,6 +470,9 @@ function fromRow(row: {
   noticeFont?: unknown;
   noticeSize?: unknown;
   noticeColor?: unknown;
+  burnAlertTitle?: unknown;
+  burnAlertBodyOne?: unknown;
+  burnAlertBodyMany?: unknown;
 }): WallSettings {
   return {
     googleLogin: row.googleLogin,
@@ -482,6 +489,11 @@ function fromRow(row: {
     noticeFont: parseNoticeFont(row.noticeFont),
     noticeSize: parseNoticeSize(row.noticeSize),
     noticeColor: parseNoticeColor(row.noticeColor),
+    ...burnAlertFromSettings({
+      burnAlertTitle: row.burnAlertTitle as string | undefined,
+      burnAlertBodyOne: row.burnAlertBodyOne as string | undefined,
+      burnAlertBodyMany: row.burnAlertBodyMany as string | undefined,
+    }),
   };
 }
 

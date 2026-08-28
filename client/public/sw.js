@@ -21,9 +21,13 @@ self.addEventListener("notificationclick", (event) => {
 
 async function onPush(event) {
   let unread = 1;
+  let title = "Pidaka";
+  let body = "A burn arrived.";
   try {
     const data = event.data ? event.data.json() : null;
     if (data && Number.isFinite(data.n)) unread = Math.max(1, data.n);
+    if (data?.title) title = String(data.title);
+    if (data?.body) body = String(data.body);
   } catch {
     // payload is only a kind + count; ignore junk
   }
@@ -32,13 +36,12 @@ async function onPush(event) {
   const focused = windows.some((client) => client.focused);
   if (focused) {
     for (const client of windows) {
-      client.postMessage({ kind: "burn" });
+      client.postMessage({ kind: "burn", n: unread, title, body });
     }
     return;
   }
 
-  const body = unread === 1 ? "A burn arrived." : "Burns are waiting.";
-  await self.registration.showNotification("Pidaka", {
+  await self.registration.showNotification(title, {
     body,
     icon: "/apple-touch-icon.png",
     badge: "/apple-touch-icon.png",

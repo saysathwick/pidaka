@@ -62,6 +62,9 @@ export type WallSettings = {
   noticeFont: NoticeFont;
   noticeSize: NoticeSize;
   noticeColor: NoticeColor;
+  burnAlertTitle: string;
+  burnAlertBodyOne: string;
+  burnAlertBodyMany: string;
 };
 
 export type PublicWall = {
@@ -79,6 +82,9 @@ export type PublicWall = {
   noticeFont: NoticeFont;
   noticeSize: NoticeSize;
   noticeColor: NoticeColor;
+  burnAlertTitle: string;
+  burnAlertBodyOne: string;
+  burnAlertBodyMany: string;
   googleReady: boolean;
   appleReady: boolean;
 };

@@ -56,6 +56,7 @@ import {
 import { mailDomainLooksReal } from "./mail-domain";
 import { burnAlertsReady, notifyBurnArrived, vapidPublicKey } from "./push";
 import { fcmReady } from "./fcm";
+import { sanitizeBurnAlertBodyMany, sanitizeBurnAlertBodyOne, sanitizeBurnAlertTitle } from "@shared/burn-alert";
 
 if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET environment variable must be set");
@@ -215,6 +216,18 @@ export async function registerRoutes(
           parsed.data.noticeColor !== undefined
             ? parseNoticeColor(parsed.data.noticeColor)
             : current.noticeColor,
+        burnAlertTitle:
+          parsed.data.burnAlertTitle !== undefined
+            ? sanitizeBurnAlertTitle(parsed.data.burnAlertTitle)
+            : current.burnAlertTitle,
+        burnAlertBodyOne:
+          parsed.data.burnAlertBodyOne !== undefined
+            ? sanitizeBurnAlertBodyOne(parsed.data.burnAlertBodyOne)
+            : current.burnAlertBodyOne,
+        burnAlertBodyMany:
+          parsed.data.burnAlertBodyMany !== undefined
+            ? sanitizeBurnAlertBodyMany(parsed.data.burnAlertBodyMany)
+            : current.burnAlertBodyMany,
       };
       if (!settingsHaveADoor(next)) {
         return res.status(400).json({ message: "Leave at least one way in" });

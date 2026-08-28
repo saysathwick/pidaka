@@ -48,8 +48,14 @@ export async function dropNativePushToken() {
   }
 }
 
+export type BurnAlertNotice = {
+  title?: string;
+  body?: string;
+  n?: number;
+};
+
 export async function attachNativePushListeners(handlers: {
-  onBurn: () => void;
+  onBurn: (alert: BurnAlertNotice) => void;
   onOpenInbox: () => void;
 }) {
   if (!nativePushSupported()) return () => {};
@@ -59,8 +65,12 @@ export async function attachNativePushListeners(handlers: {
       void persistDeviceToken(event.value);
     }),
     PushNotifications.addListener("registrationError", () => {}),
-    PushNotifications.addListener("pushNotificationReceived", () => {
-      handlers.onBurn();
+    PushNotifications.addListener("pushNotificationReceived", (notification) => {
+      handlers.onBurn({
+        title: notification.title,
+        body: notification.body,
+        n: Number(notification.data?.n),
+      });
     }),
     PushNotifications.addListener("pushNotificationActionPerformed", () => {
       handlers.onOpenInbox();

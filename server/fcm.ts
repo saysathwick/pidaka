@@ -1,5 +1,6 @@
 import { cert, getApps, initializeApp, type ServiceAccount } from "firebase-admin/app";
 import { getMessaging, type Messaging } from "firebase-admin/messaging";
+import type { BurnAlertPayload } from "@shared/burn-alert";
 import { storage } from "./storage";
 
 function loadServiceAccount() {
@@ -37,16 +38,20 @@ const INVALID_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
 ]);
 
-export async function notifyBurnViaFcm(userId: string, unread: number) {
+export async function notifyBurnViaFcm(userId: string, alert: BurnAlertPayload) {
   if (!messaging) return;
   const tokens = await storage.listDevicePushTokens(userId);
   if (tokens.length === 0) return;
 
-  const body = unread === 1 ? "A burn arrived." : "Burns are waiting.";
   const response = await messaging.sendEachForMulticast({
     tokens: tokens.map((row) => row.token),
-    notification: { title: "Pidaka", body },
-    data: { kind: "burn", n: String(Math.max(1, unread)) },
+    notification: { title: alert.title, body: alert.body },
+    data: {
+      kind: alert.kind,
+      n: String(alert.n),
+      title: alert.title,
+      body: alert.body,
+    },
     android: { priority: "high" },
   });
 
