@@ -19,6 +19,7 @@ import { CinematicIntro, shouldPlayIntro } from "@/components/cinematic-intro";
 import { NameReveal } from "@/components/name-reveal";
 import { BurningCookieIcon } from "@/components/burning-cookie-icon";
 import { AnimatePresence, motion } from "framer-motion";
+import { useAndroidBackButton } from "@/lib/capacitor";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -102,6 +103,8 @@ function AppContent() {
 }
 
 function App() {
+  useAndroidBackButton();
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={200}>

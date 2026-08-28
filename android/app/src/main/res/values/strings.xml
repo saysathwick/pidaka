@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Pidaka</string>
+    <string name="title_activity_main">Pidaka</string>
+    <string name="package_name">in.pidaka.app</string>
+    <string name="custom_url_scheme">in.pidaka.app</string>
+</resources>
