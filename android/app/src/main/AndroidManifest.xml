@@ -29,6 +29,16 @@
                 <data android:scheme="in.pidaka.app" android:host="auth" />
             </intent-filter>
 
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="pidaka.in"
+                    android:pathPrefix="/app/auth" />
+            </intent-filter>
+
         </activity>
 
         <provider

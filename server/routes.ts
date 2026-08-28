@@ -40,6 +40,7 @@ import { readPublicWall, readWallSettings, toPublicWall } from "./wall-settings"
 import { parseNoticeColor, parseNoticeFont, parseNoticeSize, parseNoticeStyle, sanitizeNoticeLinks, settingsHaveADoor } from "@shared/wall";
 import { generateAnonymousName } from "@shared/names";
 import { log } from "./index";
+import { appAuthBridgeHtml, appAuthBridgePath, appAuthBridgeQuery } from "./app-auth";
 import {
   clearHearthCookie,
   clearSessionCookie,
@@ -360,7 +361,8 @@ export async function registerRoutes(
     client?: "app",
   ) {
     if (client === "app") {
-      return res.redirect(`in.pidaka.app://auth?authError=${provider}`);
+      const params = new URLSearchParams({ authError: provider });
+      return res.redirect(`${origin}${appAuthBridgePath(params)}`);
     }
     return res.redirect(`${origin}/?authError=${provider}`);
   }
@@ -376,11 +378,20 @@ export async function registerRoutes(
     if (client === "app") {
       const params = new URLSearchParams({ token });
       if (created) params.set("named", "1");
-      return res.redirect(`in.pidaka.app://auth?${params}`);
+      return res.redirect(`${origin}${appAuthBridgePath(params)}`);
     }
     const suffix = created ? "?named=1" : "";
     return res.redirect(`${origin}/${suffix}`);
   }
+
+  app.get("/app/auth", (req: Request, res: Response) => {
+    const params = appAuthBridgeQuery(req);
+    if (!params.get("token") && !params.get("authError")) {
+      return res.redirect("/");
+    }
+    res.setHeader("Cache-Control", "no-store");
+    return res.type("html").send(appAuthBridgeHtml(params));
+  });
 
   app.get("/api/auth/google", async (req: Request, res: Response) => {
     const origin = publicOrigin(req);

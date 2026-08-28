@@ -1,6 +1,6 @@
 import { App } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
-import { apiUrl, isNativeApp } from "@/lib/api-base";
+import { apiUrl, isNativeApp, NATIVE_API_ORIGIN } from "@/lib/api-base";
 
 export const NATIVE_AUTH_SCHEME = "in.pidaka.app";
 export const NATIVE_AUTH_HOST = "auth";
@@ -14,6 +14,14 @@ export type OAuthReturnParams = {
   authError?: string | null;
 };
 
+function paramsFromSearch(searchParams: URLSearchParams): OAuthReturnParams {
+  return {
+    token: searchParams.get("token"),
+    named: searchParams.get("named") === "1",
+    authError: searchParams.get("authError"),
+  };
+}
+
 export function parseOAuthReturn(url: string): OAuthReturnParams | null {
   let parsed: URL;
   try {
@@ -21,14 +29,44 @@ export function parseOAuthReturn(url: string): OAuthReturnParams | null {
   } catch {
     return null;
   }
-  if (parsed.protocol !== `${NATIVE_AUTH_SCHEME}:` || parsed.host !== NATIVE_AUTH_HOST) {
-    return null;
+
+  if (parsed.protocol === `${NATIVE_AUTH_SCHEME}:` && parsed.host === NATIVE_AUTH_HOST) {
+    const params = paramsFromSearch(parsed.searchParams);
+    if (!params.token && !params.authError) return null;
+    return params;
   }
-  return {
-    token: parsed.searchParams.get("token"),
-    named: parsed.searchParams.get("named") === "1",
-    authError: parsed.searchParams.get("authError"),
-  };
+
+  const onBridge =
+    parsed.origin === NATIVE_API_ORIGIN.replace(/\/$/, "")
+    && parsed.pathname === "/app/auth";
+  if (onBridge) {
+    const params = paramsFromSearch(parsed.searchParams);
+    if (!params.token && !params.authError) return null;
+    return params;
+  }
+
+  return null;
+}
+
+async function closeOAuthBrowser() {
+  if (!isNativeApp()) return;
+  try {
+    await Browser.close();
+  } catch {
+    // already closed
+  }
+}
+
+export function handleNativeOAuthReturn(
+  onReturn: (params: OAuthReturnParams) => void,
+  url: string,
+) {
+  const params = parseOAuthReturn(url);
+  if (!params) return false;
+  void closeOAuthBrowser();
+  resetNativeWebViewHome();
+  onReturn(params);
+  return true;
 }
 
 export async function openNativeOAuth(provider: "google" | "apple") {
@@ -49,26 +87,30 @@ export function listenForNativeOAuthReturn(
   if (!isNativeApp()) return () => {};
 
   let cancelled = false;
+
   const launch = App.getLaunchUrl().then((result) => {
     if (cancelled || !result?.url) return;
-    const params = parseOAuthReturn(result.url);
-    if (!params) return;
-    void Browser.close();
-    resetNativeWebViewHome();
-    onReturn(params);
+    handleNativeOAuthReturn(onReturn, result.url);
   });
 
-  const listener = App.addListener("appUrlOpen", (event) => {
-    const params = parseOAuthReturn(event.url);
-    if (!params) return;
-    void Browser.close();
-    resetNativeWebViewHome();
-    onReturn(params);
+  const urlOpen = App.addListener("appUrlOpen", (event) => {
+    handleNativeOAuthReturn(onReturn, event.url);
+  });
+
+  const resume = App.addListener("appStateChange", ({ isActive }) => {
+    if (!isActive) return;
+    void closeOAuthBrowser();
+  });
+
+  const browserFinished = Browser.addListener("browserFinished", () => {
+    void closeOAuthBrowser();
   });
 
   return () => {
     cancelled = true;
     void launch;
-    void listener.then((handle) => handle.remove());
+    void urlOpen.then((handle) => handle.remove());
+    void resume.then((handle) => handle.remove());
+    void browserFinished.then((handle) => handle.remove());
   };
 }
