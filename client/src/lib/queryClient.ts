@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { apiUrl, isNativeApp } from "@/lib/api-base";
 
 const VIEWER_KEY = "pidaka_viewer";
 
@@ -41,11 +42,11 @@ export async function apiRequest(
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(url, {
+  const res = await fetch(apiUrl(url), {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    credentials: isNativeApp() ? "omit" : "include",
   });
 
   await throwIfResNotOk(res);
@@ -58,8 +59,8 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
+    const res = await fetch(apiUrl(queryKey.join("/") as string), {
+      credentials: isNativeApp() ? "omit" : "include",
       headers: getRequestHeaders(),
     });
 

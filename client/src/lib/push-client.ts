@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/queryClient";
+import { apiUrl, isNativeApp } from "@/lib/api-base";
 
 export function pushSupported() {
   return typeof window !== "undefined"
@@ -16,7 +17,9 @@ export function urlBase64ToUint8Array(base64: string) {
 }
 
 export async function vapidKey() {
-  const res = await fetch("/api/push/vapid", { credentials: "include" });
+  const res = await fetch(apiUrl("/api/push/vapid"), {
+    credentials: isNativeApp() ? "omit" : "include",
+  });
   if (!res.ok) return null;
   const data = (await res.json()) as { publicKey?: string };
   return data.publicKey || null;

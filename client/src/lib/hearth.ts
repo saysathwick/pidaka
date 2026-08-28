@@ -1,3 +1,5 @@
+import { apiUrl, isNativeApp } from "@/lib/api-base";
+
 const TOKEN_KEY = "pidaka_hearth";
 
 export function clearHearthToken() {
@@ -9,11 +11,11 @@ export async function hearthRequest(method: string, url: string, data?: unknown)
   const headers: Record<string, string> = {};
   if (leftover) headers.Authorization = `Bearer ${leftover}`;
   if (data) headers["Content-Type"] = "application/json";
-  const res = await fetch(url, {
+  const res = await fetch(apiUrl(url), {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    credentials: isNativeApp() ? "omit" : "include",
   });
   if (!res.ok) {
     const text = await res.text();

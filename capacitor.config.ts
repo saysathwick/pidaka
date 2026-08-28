@@ -6,10 +6,20 @@ const config: CapacitorConfig = {
   webDir: "dist/public",
   server: {
     androidScheme: "https",
-    hostname: "pidaka.in",
+    allowNavigation: [
+      "pidaka.in",
+      "*.google.com",
+      "*.google.co.in",
+      "appleid.apple.com",
+    ],
   },
   android: {
     allowMixedContent: false,
+  },
+  plugins: {
+    CapacitorHttp: {
+      enabled: true,
+    },
   },
 };
 

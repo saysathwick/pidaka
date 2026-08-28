@@ -298,9 +298,10 @@ export async function registerRoutes(
         anonymousName,
       });
 
-      issueSession(res, user.id);
+      const token = issueSession(res, user.id);
 
       return res.status(201).json({
+        token,
         created: true,
         user: await publicUser(user.id, {
           anonymousName: user.anonymousName,
@@ -333,9 +334,10 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Invalid email or password" });
       }
 
-      issueSession(res, user.id);
+      const token = issueSession(res, user.id);
 
       return res.json({
+        token,
         user: await publicUser(user.id, {
           anonymousName: user.anonymousName,
           burnsSentCount: user.burnsSentCount,
@@ -347,23 +349,51 @@ export async function registerRoutes(
     }
   });
 
-  function finishRedirect(res: Response, origin: string, token: string, created: boolean) {
+  function oauthClient(req: Request): "app" | undefined {
+    return req.query.client === "app" ? "app" : undefined;
+  }
+
+  function oauthErrorRedirect(
+    res: Response,
+    origin: string,
+    provider: "google" | "apple",
+    client?: "app",
+  ) {
+    if (client === "app") {
+      return res.redirect(`in.pidaka.app://auth?authError=${provider}`);
+    }
+    return res.redirect(`${origin}/?authError=${provider}`);
+  }
+
+  function finishRedirect(
+    res: Response,
+    origin: string,
+    token: string,
+    created: boolean,
+    client?: "app",
+  ) {
     setSessionCookie(res, token);
+    if (client === "app") {
+      const params = new URLSearchParams({ token });
+      if (created) params.set("named", "1");
+      return res.redirect(`in.pidaka.app://auth?${params}`);
+    }
     const suffix = created ? "?named=1" : "";
     return res.redirect(`${origin}/${suffix}`);
   }
 
   app.get("/api/auth/google", async (req: Request, res: Response) => {
     const origin = publicOrigin(req);
+    const client = oauthClient(req);
     const wall = await readPublicWall();
     if (!wall.google) {
-      return res.redirect(`${origin}/?authError=google`);
+      return oauthErrorRedirect(res, origin, "google", client);
     }
     if (googleConfigured()) {
-      return res.redirect(googleAuthUrl(origin, signOAuthState("google")));
+      return res.redirect(googleAuthUrl(origin, signOAuthState("google", client)));
     }
     if (!demoOAuthEnabled()) {
-      return res.redirect(`${origin}/?authError=google`);
+      return oauthErrorRedirect(res, origin, "google", client);
     }
     try {
       const settings = await readWallSettings();
@@ -373,20 +403,21 @@ export async function registerRoutes(
         email: "demo.google@users.pidaka",
         allowCreate: settings.registrationsOpen,
       });
-      return finishRedirect(res, origin, signAppToken(user.id), created);
+      return finishRedirect(res, origin, signAppToken(user.id), created, client);
     } catch {
-      return res.redirect(`${origin}/?authError=google`);
+      return oauthErrorRedirect(res, origin, "google", client);
     }
   });
 
   app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
     const origin = publicOrigin(req);
+    const code = typeof req.query.code === "string" ? req.query.code : "";
+    const state = typeof req.query.state === "string" ? req.query.state : "";
+    const oauthState = readOAuthState(state);
+    if (!code || oauthState?.provider !== "google") {
+      return oauthErrorRedirect(res, origin, "google", oauthState?.client);
+    }
     try {
-      const code = typeof req.query.code === "string" ? req.query.code : "";
-      const state = typeof req.query.state === "string" ? req.query.state : "";
-      if (!code || readOAuthState(state) !== "google") {
-        return res.redirect(`${origin}/?authError=google`);
-      }
       const settings = await readWallSettings();
       const profile = await googleProfile(origin, code);
       const { user, created } = await findOrCreateAuthUser({
@@ -395,23 +426,24 @@ export async function registerRoutes(
         email: profile.email,
         allowCreate: settings.registrationsOpen,
       });
-      return finishRedirect(res, origin, signAppToken(user.id), created);
+      return finishRedirect(res, origin, signAppToken(user.id), created, oauthState.client);
     } catch {
-      return res.redirect(`${origin}/?authError=google`);
+      return oauthErrorRedirect(res, origin, "google", oauthState.client);
     }
   });
 
   app.get("/api/auth/apple", async (req: Request, res: Response) => {
     const origin = publicOrigin(req);
+    const client = oauthClient(req);
     const wall = await readPublicWall();
     if (!wall.apple) {
-      return res.redirect(`${origin}/?authError=apple`);
+      return oauthErrorRedirect(res, origin, "apple", client);
     }
     if (appleConfigured()) {
-      return res.redirect(appleAuthUrl(origin, signOAuthState("apple")));
+      return res.redirect(appleAuthUrl(origin, signOAuthState("apple", client)));
     }
     if (!demoOAuthEnabled()) {
-      return res.redirect(`${origin}/?authError=apple`);
+      return oauthErrorRedirect(res, origin, "apple", client);
     }
     try {
       const settings = await readWallSettings();
@@ -421,20 +453,21 @@ export async function registerRoutes(
         email: "demo.apple@users.pidaka",
         allowCreate: settings.registrationsOpen,
       });
-      return finishRedirect(res, origin, signAppToken(user.id), created);
+      return finishRedirect(res, origin, signAppToken(user.id), created, client);
     } catch {
-      return res.redirect(`${origin}/?authError=apple`);
+      return oauthErrorRedirect(res, origin, "apple", client);
     }
   });
 
   app.post("/api/auth/apple/callback", async (req: Request, res: Response) => {
     const origin = publicOrigin(req);
+    const code = typeof req.body?.code === "string" ? req.body.code : "";
+    const state = typeof req.body?.state === "string" ? req.body.state : "";
+    const oauthState = readOAuthState(state);
+    if (!code || oauthState?.provider !== "apple") {
+      return oauthErrorRedirect(res, origin, "apple", oauthState?.client);
+    }
     try {
-      const code = typeof req.body?.code === "string" ? req.body.code : "";
-      const state = typeof req.body?.state === "string" ? req.body.state : "";
-      if (!code || readOAuthState(state) !== "apple") {
-        return res.redirect(`${origin}/?authError=apple`);
-      }
       const settings = await readWallSettings();
       const profile = await appleProfile(origin, code);
       const { user, created } = await findOrCreateAuthUser({
@@ -443,9 +476,9 @@ export async function registerRoutes(
         email: profile.email,
         allowCreate: settings.registrationsOpen,
       });
-      return finishRedirect(res, origin, signAppToken(user.id), created);
+      return finishRedirect(res, origin, signAppToken(user.id), created, oauthState.client);
     } catch {
-      return res.redirect(`${origin}/?authError=apple`);
+      return oauthErrorRedirect(res, origin, "apple", oauthState.client);
     }
   });
 
@@ -501,8 +534,9 @@ export async function registerRoutes(
         phone,
         allowCreate: settings.registrationsOpen,
       });
-      issueSession(res, user.id);
+      const token = issueSession(res, user.id);
       return res.json({
+        token,
         created,
         user: await publicUser(user.id, {
           anonymousName: user.anonymousName,

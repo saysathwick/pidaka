@@ -24,15 +24,26 @@ export function signAppToken(userId: string) {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "7d", algorithm: "HS256" });
 }
 
-export function signOAuthState(provider: AuthProvider) {
-  return jwt.sign({ provider, n: randomBytes(8).toString("hex") }, JWT_SECRET, { expiresIn: "10m", algorithm: "HS256" });
+export function signOAuthState(provider: AuthProvider, client?: "app") {
+  return jwt.sign({ provider, client, n: randomBytes(8).toString("hex") }, JWT_SECRET, { expiresIn: "10m", algorithm: "HS256" });
 }
 
-export function readOAuthState(state: string): AuthProvider | null {
+export type OAuthStatePayload = {
+  provider: AuthProvider;
+  client?: "app";
+};
+
+export function readOAuthState(state: string): OAuthStatePayload | null {
   try {
-    const decoded = jwt.verify(state, JWT_SECRET, { algorithms: ["HS256"] }) as { provider?: string };
-    if (decoded.provider === "google" || decoded.provider === "apple") return decoded.provider;
-    return null;
+    const decoded = jwt.verify(state, JWT_SECRET, { algorithms: ["HS256"] }) as {
+      provider?: string;
+      client?: string;
+    };
+    if (decoded.provider !== "google" && decoded.provider !== "apple") return null;
+    return {
+      provider: decoded.provider,
+      client: decoded.client === "app" ? "app" : undefined,
+    };
   } catch {
     return null;
   }

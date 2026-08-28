@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { dropBurnSubscription } from "@/lib/push-client";
+import { apiUrl, isNativeApp } from "@/lib/api-base";
+import { listenForNativeOAuthReturn, type OAuthReturnParams } from "@/lib/native-auth";
 
 interface UserData {
   anonymousName: string;
@@ -37,38 +39,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
   const namedRef = useRef(false);
 
-  const applyUser = useCallback((userData: UserData, created?: boolean) => {
-    localStorage.removeItem("pidaka_token");
-    setToken("cookie");
+  const applyUser = useCallback((userData: UserData, nextToken?: string, created?: boolean) => {
+    if (isNativeApp() && nextToken) {
+      localStorage.setItem("pidaka_token", nextToken);
+      setToken(nextToken);
+    } else if (!isNativeApp()) {
+      localStorage.removeItem("pidaka_token");
+      setToken("cookie");
+    }
     setUser({ ...userData, unreadCount: userData.unreadCount ?? 0 });
     if (created) setJustNamed(userData.anonymousName);
   }, []);
 
   const refreshUser = useCallback(async () => {
-    const leftover = localStorage.getItem("pidaka_token");
+    const storedToken = localStorage.getItem("pidaka_token");
     const headers: Record<string, string> = {};
-    if (leftover) headers.Authorization = `Bearer ${leftover}`;
+    if (storedToken) headers.Authorization = `Bearer ${storedToken}`;
     try {
-      const res = await fetch("/api/auth/me", {
-        credentials: "include",
+      const res = await fetch(apiUrl("/api/auth/me"), {
+        credentials: isNativeApp() ? "omit" : "include",
         headers,
       });
       if (res.ok) {
         const userData = await res.json();
-        localStorage.removeItem("pidaka_token");
+        if (isNativeApp() && storedToken) {
+          setToken(storedToken);
+        } else if (!isNativeApp()) {
+          localStorage.removeItem("pidaka_token");
+          setToken("cookie");
+        }
         setUser({ ...userData, unreadCount: userData.unreadCount ?? 0 });
-        setToken("cookie");
         if (namedRef.current) {
           setJustNamed(userData.anonymousName);
           namedRef.current = false;
         }
-      } else {
+      } else if (storedToken) {
         localStorage.removeItem("pidaka_token");
+        setUser(null);
+        setToken(null);
+      } else {
         setUser(null);
         setToken(null);
       }
     } catch {
-      localStorage.removeItem("pidaka_token");
+      if (storedToken) localStorage.removeItem("pidaka_token");
       setUser(null);
       setToken(null);
     } finally {
@@ -76,37 +90,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const applyOAuthReturn = useCallback((params: OAuthReturnParams) => {
+    if (params.authError) {
+      setAuthError(
+        params.authError === "apple"
+          ? "Apple sign-in did not finish."
+          : "Google sign-in did not finish.",
+      );
+    }
+    if (params.named) namedRef.current = true;
+    if (params.token) localStorage.setItem("pidaka_token", params.token);
+    setIsLoading(true);
+    void refreshUser();
+  }, [refreshUser]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const inbound = params.get("token");
-    const named = params.get("named");
-    const error = params.get("authError");
-    if (error) {
-      setAuthError(error === "apple" ? "Apple sign-in did not finish." : "Google sign-in did not finish.");
-    }
-    if (named === "1") namedRef.current = true;
-    if (inbound) {
-      localStorage.setItem("pidaka_token", inbound);
-    }
-    if (inbound || named || error) {
+    applyOAuthReturn({
+      token: params.get("token"),
+      named: params.get("named") === "1",
+      authError: params.get("authError"),
+    });
+    if (params.get("token") || params.get("named") || params.get("authError")) {
       const url = new URL(window.location.href);
       url.searchParams.delete("token");
       url.searchParams.delete("named");
       url.searchParams.delete("authError");
       window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
     }
-    void refreshUser();
-  }, [refreshUser]);
+  }, [applyOAuthReturn]);
+
+  useEffect(() => {
+    return listenForNativeOAuthReturn(applyOAuthReturn);
+  }, [applyOAuthReturn]);
 
   const completeSession = (data: SessionPayload) => {
-    applyUser({ ...data.user, unreadCount: data.user.unreadCount ?? 0 }, data.created);
+    applyUser(
+      { ...data.user, unreadCount: data.user.unreadCount ?? 0 },
+      data.token,
+      data.created,
+    );
   };
 
   const logout = async () => {
+    const storedToken = localStorage.getItem("pidaka_token");
     localStorage.removeItem("pidaka_token");
     await dropBurnSubscription();
     try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      const headers: Record<string, string> = {};
+      if (storedToken) headers.Authorization = `Bearer ${storedToken}`;
+      await fetch(apiUrl("/api/auth/logout"), {
+        method: "POST",
+        credentials: isNativeApp() ? "omit" : "include",
+        headers,
+      });
     } catch {
       // still leave
     }

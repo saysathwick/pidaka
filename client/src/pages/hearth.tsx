@@ -17,6 +17,7 @@ import {
 import { CowDungCake } from "@/components/burning-cookie-icon";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { apiUrl, isNativeApp } from "@/lib/api-base";
 import { useTheme } from "@/lib/theme";
 import { Moon, Sun } from "lucide-react";
 import {
@@ -211,7 +212,10 @@ export default function HearthPage() {
     setLeaving(true);
     clearHearthToken();
     try {
-      await fetch("/api/admin/logout", { method: "POST", credentials: "include" });
+      await fetch(apiUrl("/api/admin/logout"), {
+        method: "POST",
+        credentials: isNativeApp() ? "omit" : "include",
+      });
     } catch {
       // still leave
     }

@@ -3,6 +3,8 @@ import { useAuth } from "@/lib/auth";
 import { useAuthModal } from "@/lib/auth-modal";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
+import { isNativeApp } from "@/lib/api-base";
+import { openNativeOAuth } from "@/lib/native-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -189,6 +191,10 @@ export function AuthForm() {
               disabled={loading !== null}
               onClick={() => {
                 setLoading("google");
+                if (isNativeApp()) {
+                  void openNativeOAuth("google").finally(() => setLoading(null));
+                  return;
+                }
                 window.location.href = "/api/auth/google";
               }}
               data-testid="button-auth-google"
@@ -205,6 +211,10 @@ export function AuthForm() {
               disabled={loading !== null}
               onClick={() => {
                 setLoading("apple");
+                if (isNativeApp()) {
+                  void openNativeOAuth("apple").finally(() => setLoading(null));
+                  return;
+                }
                 window.location.href = "/api/auth/apple";
               }}
               data-testid="button-auth-apple"
