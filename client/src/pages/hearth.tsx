@@ -24,6 +24,7 @@ import {
   clearHearthToken,
   hearthRequest,
 } from "@/lib/hearth";
+import { isHearthApp } from "@/lib/app-mode";
 import { WallNotice } from "@/components/wall-notice";
 import { fireEmberBurst } from "@/lib/ember-burst";
 import type {
@@ -231,7 +232,13 @@ export default function HearthPage() {
     <div className="min-h-screen bg-background wall-atmosphere">
       <header className="border-b border-border/60 bg-background/75 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
-          <button type="button" className="text-left" onClick={() => navigate("/")}>
+          <button
+            type="button"
+            className="text-left"
+            onClick={() => {
+              if (!isHearthApp()) navigate("/");
+            }}
+          >
             <p className="font-serif text-lg tracking-[0.18em] uppercase">Pidaka</p>
             <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Hearth</p>
           </button>

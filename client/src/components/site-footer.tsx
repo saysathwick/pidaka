@@ -11,7 +11,7 @@ const LINKS = [
 export function SiteFooter({ padded = false }: { padded?: boolean }) {
   return (
     <footer
-      className={`border-t border-border/60 bg-background/80 ${padded ? "pb-24 sm:pb-8" : ""}`}
+      className={`border-t border-border/60 bg-background/80 ${padded ? "pb-24 sm:pb-8" : ""} app-shell-footer`}
     >
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1">

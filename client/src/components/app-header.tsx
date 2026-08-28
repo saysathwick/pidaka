@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { LogOut, MessageCircle, Moon, Sun } from "lucide-react";
+import { LogOut, MessageCircle, Moon, Sun, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useAuthModal } from "@/lib/auth-modal";
 import { useTheme } from "@/lib/theme";
@@ -84,12 +84,22 @@ export function AppHeader({
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/75 backdrop-blur-xl">
       <div className="max-w-6xl mx-auto flex items-center justify-between gap-2 px-4 py-2.5">
-        <button
-          type="button"
-          className="flex min-w-0 items-center gap-2.5 rounded-md px-1 py-1 text-left hover-elevate"
-          onClick={() => navigate("/")}
-          data-testid="text-brand"
-        >
+        <div className="flex min-w-0 items-center gap-1">
+          {place === "burns" && (
+            <IconAction
+              label="Back to the wall"
+              onClick={() => navigate("/")}
+              testId="button-back-wall"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </IconAction>
+          )}
+          <button
+            type="button"
+            className="flex min-w-0 items-center gap-2.5 rounded-md px-1 py-1 text-left hover-elevate"
+            onClick={() => navigate("/")}
+            data-testid="text-brand"
+          >
           <BurningCookieIcon className="h-7 w-7 shrink-0" isLit={place === "burns" || Boolean(user)} />
           <span className="flex min-w-0 flex-col justify-center">
             <span className="font-serif text-xl leading-none tracking-[0.18em] uppercase">Pidaka</span>
@@ -106,6 +116,7 @@ export function AppHeader({
             )}
           </span>
         </button>
+        </div>
 
         <div className="flex shrink-0 items-center gap-0.5">
           <button

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "255590233040",
+    "project_id": "pidaka-c07a3",
+    "storage_bucket": "pidaka-c07a3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:255590233040:android:d4575a9704526ae5cb3fd5",
+        "android_client_info": {
+          "package_name": "in.pidaka.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbgk1824aiw2pn7Qn7mCkLZxYXv1ZfHSw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

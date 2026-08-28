@@ -7,6 +7,7 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+capacitor.config.pidaka.bak
 
 # Capacitor / Android local config (never commit secrets)
 android/local.properties
@@ -15,5 +16,11 @@ android/app/build/
 android/build/
 android/captures/
 android/.idea/
+android-hearth/local.properties
+android-hearth/.gradle/
+android-hearth/app/build/
+android-hearth/build/
+android-hearth/captures/
+android-hearth/.idea/
 *.jks
 *.keystore

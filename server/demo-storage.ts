@@ -72,6 +72,7 @@ export class DemoStorage implements IStorage {
   private burns: Burn[] = [];
   private views = new Map<string, Set<string>>();
   private pushes: Array<{ userId: string; endpoint: string; p256dh: string; auth: string; createdAt: Date }> = [];
+  private deviceTokens: Array<{ userId: string; token: string; platform: string; createdAt: Date }> = [];
 
   async getUser(id: string) {
     const user = this.users.get(id);
@@ -264,6 +265,30 @@ export class DemoStorage implements IStorage {
 
   async deletePushSubscriptionByEndpoint(endpoint: string) {
     this.pushes = this.pushes.filter((row) => row.endpoint !== endpoint);
+  }
+
+  async saveDevicePushToken(userId: string, token: string, platform: "android" | "ios") {
+    this.deviceTokens = this.deviceTokens.filter((row) => row.token !== token);
+    this.deviceTokens.unshift({ userId, token, platform, createdAt: new Date() });
+    const mine = this.deviceTokens.filter((row) => row.userId === userId);
+    if (mine.length > 8) {
+      const drop = new Set(mine.slice(8).map((row) => row.token));
+      this.deviceTokens = this.deviceTokens.filter((row) => !drop.has(row.token));
+    }
+  }
+
+  async listDevicePushTokens(userId: string) {
+    return this.deviceTokens
+      .filter((row) => row.userId === userId)
+      .map(({ token, platform }) => ({ token, platform }));
+  }
+
+  async deleteDevicePushToken(userId: string, token: string) {
+    this.deviceTokens = this.deviceTokens.filter((row) => !(row.userId === userId && row.token === token));
+  }
+
+  async deleteDevicePushTokenByToken(token: string) {
+    this.deviceTokens = this.deviceTokens.filter((row) => row.token !== token);
   }
 
   async getWitnessCounts() {

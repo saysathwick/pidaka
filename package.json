@@ -13,7 +13,11 @@
     "check": "tsc",
     "db:push": "drizzle-kit push --force",
     "cap:sync": "npm run build && npx cap sync android",
-    "cap:open": "npx cap open android"
+    "cap:open": "npx cap open android",
+    "build:hearth": "tsx script/build-hearth.ts",
+    "cap:sync:hearth": "npm run build:hearth && npx tsx script/cap-hearth.ts sync",
+    "cap:open:hearth": "npx tsx script/cap-hearth.ts open",
+    "cap:add:hearth": "npx tsx script/cap-hearth.ts add-android"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
@@ -21,6 +25,8 @@
     "@capacitor/browser": "^8.0.4",
     "@capacitor/cli": "^8.5.0",
     "@capacitor/core": "^8.5.0",
+    "@capacitor/push-notifications": "^8.1.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@radix-ui/react-accordion": "^1.2.4",
@@ -67,6 +73,7 @@
     "embla-carousel-react": "^8.6.0",
     "express": "^5.0.1",
     "express-session": "^1.18.1",
+    "firebase-admin": "^14.3.0",
     "framer-motion": "^11.13.1",
     "input-otp": "^1.4.2",
     "jsonwebtoken": "^9.0.3",

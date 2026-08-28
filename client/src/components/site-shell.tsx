@@ -18,7 +18,7 @@ export function SiteShell({
   className?: string;
 }) {
   return (
-    <div className="flex min-h-screen flex-col bg-background wall-atmosphere">
+    <div className="app-shell flex min-h-screen flex-col bg-background wall-atmosphere">
       <AppHeader place={place} fetching={fetching} />
       <BurnAlertPrompt />
       <div className={cn("flex-1", className)}>{children}</div>

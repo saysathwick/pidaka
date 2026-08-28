@@ -58,6 +58,14 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const devicePushTokens = pgTable("device_push_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  token: text("token").notNull().unique(),
+  platform: text("platform").notNull().default("android"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const wallSettings = pgTable("wall_settings", {
   id: varchar("id").primaryKey(),
   googleLogin: boolean("google_login").notNull().default(false),
@@ -142,6 +150,15 @@ export const pushUnsubscribeSchema = z.object({
   endpoint: z.string().url().max(2048),
 });
 
+export const devicePushRegisterSchema = z.object({
+  token: z.string().min(20).max(4096),
+  platform: z.enum(["android", "ios"]).default("android"),
+});
+
+export const devicePushUnregisterSchema = z.object({
+  token: z.string().min(20).max(4096),
+});
+
 export const adminSessionSchema = z.object({
   secret: z.string().min(1, "Enter the hearth key"),
 });
@@ -186,3 +203,4 @@ export type Burn = typeof burns.$inferSelect;
 export type PidakaView = typeof pidakaViews.$inferSelect;
 export type WallSettingsRow = typeof wallSettings.$inferSelect;
 export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
+export type DevicePushTokenRow = typeof devicePushTokens.$inferSelect;

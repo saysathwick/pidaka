@@ -1,9 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { queryClient } from "@/lib/queryClient";
 import {
+  attachNativePushListeners,
+  nativePushAlertsReady,
+  nativePushPermission,
+  nativePushSupported,
+  registerNativePush,
+  syncNativePush,
+} from "@/lib/native-push";
+import {
   persistSubscription,
-  pushSupported,
+  pushSupported as webPushSupported,
   urlBase64ToUint8Array,
   vapidKey,
 } from "@/lib/push-client";
@@ -25,15 +34,24 @@ const BurnAlertContext = createContext<BurnAlertContextType | null>(null);
 
 export function BurnAlertProvider({ children }: { children: ReactNode }) {
   const { user, refreshUser } = useAuth();
-  const supported = pushSupported();
+  const [, navigate] = useLocation();
+  const isNative = nativePushSupported();
+  const supported = isNative || webPushSupported();
   const [permission, setPermission] = useState<Permission>(() =>
-    supported ? Notification.permission : "unsupported",
+    supported && !isNative && typeof Notification !== "undefined"
+      ? Notification.permission
+      : "unsupported",
   );
   const [prompt, setPrompt] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const sync = useCallback(async () => {
-    if (!supported || !user) {
+  const refreshBurnData = useCallback(() => {
+    void refreshUser();
+    void queryClient.invalidateQueries({ queryKey: ["/api/burns/inbox"] });
+  }, [refreshUser]);
+
+  const syncWeb = useCallback(async () => {
+    if (!webPushSupported() || !user) {
       setPrompt(false);
       return;
     }
@@ -71,7 +89,42 @@ export function BurnAlertProvider({ children }: { children: ReactNode }) {
       return;
     }
     setPrompt(localStorage.getItem(SKIP_KEY) !== "1");
-  }, [supported, user]);
+  }, [user]);
+
+  const syncNative = useCallback(async () => {
+    if (!isNative || !user) {
+      setPrompt(false);
+      return;
+    }
+    if (!(await nativePushAlertsReady())) {
+      setPrompt(false);
+      return;
+    }
+    const current = await nativePushPermission();
+    setPermission(current);
+    if (current === "granted") {
+      try {
+        await syncNativePush();
+      } catch {
+        // register can fail when offline
+      }
+      setPrompt(false);
+      return;
+    }
+    if (current === "denied") {
+      setPrompt(false);
+      return;
+    }
+    setPrompt(localStorage.getItem(SKIP_KEY) !== "1");
+  }, [isNative, user]);
+
+  const sync = useCallback(async () => {
+    if (isNative) {
+      await syncNative();
+      return;
+    }
+    await syncWeb();
+  }, [isNative, syncNative, syncWeb]);
 
   useEffect(() => {
     void sync();
@@ -79,10 +132,33 @@ export function BurnAlertProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user || !supported) return;
+
+    if (isNative) {
+      let active = true;
+      let cleanup = () => {};
+      void (async () => {
+        const remove = await attachNativePushListeners({
+          onBurn: refreshBurnData,
+          onOpenInbox: () => {
+            navigate("/inbox");
+            refreshBurnData();
+          },
+        });
+        if (!active) {
+          remove();
+          return;
+        }
+        cleanup = remove;
+      })();
+      return () => {
+        active = false;
+        cleanup();
+      };
+    }
+
     const onMessage = (event: MessageEvent) => {
       if (event.data?.kind !== "burn") return;
-      void refreshUser();
-      void queryClient.invalidateQueries({ queryKey: ["/api/burns/inbox"] });
+      refreshBurnData();
     };
     navigator.serviceWorker.addEventListener("message", onMessage);
     const onVisible = () => {
@@ -93,24 +169,30 @@ export function BurnAlertProvider({ children }: { children: ReactNode }) {
       navigator.serviceWorker.removeEventListener("message", onMessage);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [user, supported, refreshUser]);
+  }, [user, supported, isNative, refreshBurnData, refreshUser, navigate]);
 
   const enable = useCallback(async () => {
     if (!supported || busy) return;
     setBusy(true);
     try {
       localStorage.removeItem(SKIP_KEY);
+      if (isNative) {
+        const granted = await registerNativePush();
+        setPermission(granted ? "granted" : "denied");
+        setPrompt(false);
+        return;
+      }
       const result = await Notification.requestPermission();
       setPermission(result);
       if (result !== "granted") {
         setPrompt(false);
         return;
       }
-      await sync();
+      await syncWeb();
     } finally {
       setBusy(false);
     }
-  }, [supported, busy, sync]);
+  }, [supported, busy, isNative, syncWeb]);
 
   const skip = useCallback(() => {
     localStorage.setItem(SKIP_KEY, "1");

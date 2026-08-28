@@ -55,6 +55,14 @@ const statements = [
     created_at timestamp NOT NULL DEFAULT now()
   )`,
   `CREATE INDEX IF NOT EXISTS push_subscriptions_user_id_idx ON push_subscriptions (user_id)`,
+  `CREATE TABLE IF NOT EXISTS device_push_tokens (
+    id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id varchar NOT NULL,
+    token text NOT NULL UNIQUE,
+    platform text NOT NULL DEFAULT 'android',
+    created_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS device_push_tokens_user_id_idx ON device_push_tokens (user_id)`,
   `CREATE TABLE IF NOT EXISTS wall_settings (
     id varchar PRIMARY KEY,
     google_login boolean NOT NULL DEFAULT false,

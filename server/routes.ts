@@ -12,6 +12,8 @@ import {
   insertBurnSchema,
   pushSubscribeSchema,
   pushUnsubscribeSchema,
+  devicePushRegisterSchema,
+  devicePushUnregisterSchema,
   phoneStartSchema,
   phoneVerifySchema,
   adminSessionSchema,
@@ -53,6 +55,7 @@ import {
 } from "./http-security";
 import { mailDomainLooksReal } from "./mail-domain";
 import { burnAlertsReady, notifyBurnArrived, vapidPublicKey } from "./push";
+import { fcmReady } from "./fcm";
 
 if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET environment variable must be set");
@@ -594,6 +597,13 @@ export async function registerRoutes(
     return res.json({ publicKey: key });
   });
 
+  app.get("/api/push/status", (_req: Request, res: Response) => {
+    if (!burnAlertsReady()) {
+      return res.status(404).json({ message: "Burn alerts are not wired" });
+    }
+    return res.json({ web: Boolean(vapidPublicKey()), native: fcmReady() });
+  });
+
   app.post("/api/push/subscribe", limitPush, authMiddleware as any, async (req: AuthRequest, res: Response) => {
     const parsed = pushSubscribeSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -618,6 +628,35 @@ export async function registerRoutes(
     }
     try {
       await storage.deletePushSubscription(req.userId!, parsed.data.endpoint);
+      return res.json({ ok: true });
+    } catch {
+      return res.status(500).json({ message: "Could not drop this device" });
+    }
+  });
+
+  app.post("/api/push/device", limitPush, authMiddleware as any, async (req: AuthRequest, res: Response) => {
+    const parsed = devicePushRegisterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0].message });
+    }
+    if (!fcmReady()) {
+      return res.status(503).json({ message: "Native burn alerts are not wired" });
+    }
+    try {
+      await storage.saveDevicePushToken(req.userId!, parsed.data.token, parsed.data.platform);
+      return res.json({ ok: true });
+    } catch {
+      return res.status(500).json({ message: "Could not keep this device" });
+    }
+  });
+
+  app.delete("/api/push/device", limitPush, authMiddleware as any, async (req: AuthRequest, res: Response) => {
+    const parsed = devicePushUnregisterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0].message });
+    }
+    try {
+      await storage.deleteDevicePushToken(req.userId!, parsed.data.token);
       return res.json({ ok: true });
     } catch {
       return res.status(500).json({ message: "Could not drop this device" });

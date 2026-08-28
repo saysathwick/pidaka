@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { dropBurnSubscription } from "@/lib/push-client";
+import { dropNativePushToken } from "@/lib/native-push";
 import { apiUrl, isNativeApp } from "@/lib/api-base";
 import { listenForNativeOAuthReturn, type OAuthReturnParams } from "@/lib/native-auth";
 
@@ -136,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedToken = localStorage.getItem("pidaka_token");
     localStorage.removeItem("pidaka_token");
     await dropBurnSubscription();
+    await dropNativePushToken();
     try {
       const headers: Record<string, string> = {};
       if (storedToken) headers.Authorization = `Bearer ${storedToken}`;

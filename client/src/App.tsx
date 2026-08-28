@@ -19,7 +19,7 @@ import { CinematicIntro, shouldPlayIntro } from "@/components/cinematic-intro";
 import { NameReveal } from "@/components/name-reveal";
 import { BurningCookieIcon } from "@/components/burning-cookie-icon";
 import { AnimatePresence, motion } from "framer-motion";
-import { useAndroidBackButton } from "@/lib/capacitor";
+import { useAndroidBackButton, initNativeChrome } from "@/lib/capacitor";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -104,6 +104,10 @@ function AppContent() {
 
 function App() {
   useAndroidBackButton();
+
+  useEffect(() => {
+    void initNativeChrome();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

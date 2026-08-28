@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { useLocation } from "wouter";
+import { isHearthApp } from "@/lib/app-mode";
 
 type Theme = "light" | "dark";
 
@@ -41,7 +42,7 @@ const ThemeContext = createContext<ThemeContextType | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const hearth = location === "/hearth";
+  const hearth = location === "/hearth" || isHearthApp();
   const [wallTheme, setWallTheme] = useState<Theme>(() => readTheme("pidaka_theme"));
   const [wallAccent, setWallAccent] = useState<AccentId>(() => readAccent("pidaka_accent"));
   const [hearthTheme, setHearthTheme] = useState<Theme>(() => readTheme("pidaka_hearth_theme"));

@@ -8,6 +8,7 @@ import {
   burns,
   pidakaViews,
   pushSubscriptions,
+  devicePushTokens,
   wallSettings,
   type User,
   type InsertUser,
@@ -46,6 +47,11 @@ export interface IStorage {
   listPushSubscriptions(userId: string): Promise<Array<{ endpoint: string; p256dh: string; auth: string }>>;
   deletePushSubscription(userId: string, endpoint: string): Promise<void>;
   deletePushSubscriptionByEndpoint(endpoint: string): Promise<void>;
+
+  saveDevicePushToken(userId: string, token: string, platform: "android" | "ios"): Promise<void>;
+  listDevicePushTokens(userId: string): Promise<Array<{ token: string; platform: string }>>;
+  deleteDevicePushToken(userId: string, token: string): Promise<void>;
+  deleteDevicePushTokenByToken(token: string): Promise<void>;
 
   getWallSettings(seed: WallSettings): Promise<WallSettings>;
   saveWallSettings(next: WallSettings): Promise<WallSettings>;
@@ -280,6 +286,42 @@ export class DatabaseStorage implements IStorage {
 
   async deletePushSubscriptionByEndpoint(endpoint: string) {
     await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+  }
+
+  async saveDevicePushToken(userId: string, token: string, platform: "android" | "ios") {
+    await db
+      .insert(devicePushTokens)
+      .values({ userId, token, platform })
+      .onConflictDoUpdate({
+        target: devicePushTokens.token,
+        set: { userId, platform, createdAt: new Date() },
+      });
+    const kept = await db
+      .select({ id: devicePushTokens.id })
+      .from(devicePushTokens)
+      .where(eq(devicePushTokens.userId, userId))
+      .orderBy(desc(devicePushTokens.createdAt));
+    const extra = kept.slice(8).map((row) => row.id);
+    if (extra.length > 0) {
+      await db.delete(devicePushTokens).where(inArray(devicePushTokens.id, extra));
+    }
+  }
+
+  async listDevicePushTokens(userId: string) {
+    return db
+      .select({ token: devicePushTokens.token, platform: devicePushTokens.platform })
+      .from(devicePushTokens)
+      .where(eq(devicePushTokens.userId, userId));
+  }
+
+  async deleteDevicePushToken(userId: string, token: string) {
+    await db
+      .delete(devicePushTokens)
+      .where(and(eq(devicePushTokens.userId, userId), eq(devicePushTokens.token, token)));
+  }
+
+  async deleteDevicePushTokenByToken(token: string) {
+    await db.delete(devicePushTokens).where(eq(devicePushTokens.token, token));
   }
 
   async getWitnessCounts(): Promise<Record<string, number>> {

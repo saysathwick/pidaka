@@ -2,6 +2,7 @@ import { createECDH, createHash } from "node:crypto";
 import webpush from "web-push";
 import { OPERATOR } from "@shared/site";
 import { storage } from "./storage";
+import { fcmReady, notifyBurnViaFcm } from "./fcm";
 
 function urlSafe(buf: Buffer) {
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -51,31 +52,41 @@ export function vapidPublicKey(): string | null {
 }
 
 export function burnAlertsReady() {
-  return Boolean(keys);
+  return Boolean(keys) || fcmReady();
 }
 
 export async function notifyBurnArrived(userId: string, unread: number) {
-  if (!keys) return;
-  const subs = await storage.listPushSubscriptions(userId);
-  if (subs.length === 0) return;
-  const payload = JSON.stringify({ kind: "burn", n: Math.max(1, unread) });
-  await Promise.all(
-    subs.map(async (sub) => {
-      try {
-        await webpush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          },
-          payload,
-          { TTL: 12 * 60 * 60, urgency: "high" },
+  const tasks: Promise<void>[] = [];
+
+  if (keys) {
+    tasks.push(
+      (async () => {
+        const subs = await storage.listPushSubscriptions(userId);
+        if (subs.length === 0) return;
+        const payload = JSON.stringify({ kind: "burn", n: Math.max(1, unread) });
+        await Promise.all(
+          subs.map(async (sub) => {
+            try {
+              await webpush.sendNotification(
+                {
+                  endpoint: sub.endpoint,
+                  keys: { p256dh: sub.p256dh, auth: sub.auth },
+                },
+                payload,
+                { TTL: 12 * 60 * 60, urgency: "high" },
+              );
+            } catch (err) {
+              const status = (err as { statusCode?: number }).statusCode;
+              if (status === 404 || status === 410) {
+                await storage.deletePushSubscriptionByEndpoint(sub.endpoint);
+              }
+            }
+          }),
         );
-      } catch (err) {
-        const status = (err as { statusCode?: number }).statusCode;
-        if (status === 404 || status === 410) {
-          await storage.deletePushSubscriptionByEndpoint(sub.endpoint);
-        }
-      }
-    }),
-  );
+      })(),
+    );
+  }
+
+  tasks.push(notifyBurnViaFcm(userId, unread));
+  await Promise.all(tasks);
 }
