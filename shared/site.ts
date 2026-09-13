@@ -6,10 +6,6 @@ export const SITE_TAGLINE_LEAD = "Speak freely.";
 
 export const SITE_TAGLINE_ACCENT = "Anonymously.";
 
-export const SITE_GREETING = "Happy Raksha Bandhan!";
-
-export const SITE_GREETING_SUB = "Cheppandi. Evariki teliyakunda.";
-
 export const OPERATOR = {
   legalName: "Phito Innovative Solutions Private Limited",
   email: "hello@phito.in",

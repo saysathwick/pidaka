@@ -231,6 +231,8 @@ export async function registerRoutes(
         ...current,
         ...parsed.data,
         notice: parsed.data.notice !== undefined ? parsed.data.notice.trim() : current.notice,
+        noticeTitle:
+          parsed.data.noticeTitle !== undefined ? parsed.data.noticeTitle.trim() : current.noticeTitle,
         noticeLinks:
           parsed.data.noticeLinks !== undefined
             ? sanitizeNoticeLinks(parsed.data.noticeLinks)

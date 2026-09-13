@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { LEGAL_UPDATED, OPERATOR, SITE_GREETING, SITE_GREETING_SUB, SITE_TAGLINE_LEAD, SITE_TAGLINE_ACCENT } from "@shared/site";
+import { LEGAL_UPDATED, OPERATOR, SITE_TAGLINE_LEAD, SITE_TAGLINE_ACCENT } from "@shared/site";
 import { ContactCopy, PrivacyCopy, TermsCopy } from "@/components/legal-copy";
 import { SiteShell } from "@/components/site-shell";
 import { cn } from "@/lib/utils";
@@ -63,8 +63,6 @@ export default function AboutPage() {
             <span>{SITE_TAGLINE_LEAD}</span>
             <span className="font-serif text-[#f47b20]"> {SITE_TAGLINE_ACCENT}</span>
           </p>
-          <p className="mt-2 font-serif text-lg text-[#4a175f] dark:text-[#c98de0]">{SITE_GREETING}</p>
-          <p className="text-sm text-muted-foreground">{SITE_GREETING_SUB}</p>
           <div className="mt-10 flex flex-col gap-8 text-[15px] leading-7 text-foreground/90">
             <p>
               A wall for things you would not sign. You are named in private — Ember

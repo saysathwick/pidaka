@@ -34,6 +34,7 @@ const COLOR_CLASS: Record<NoticeColor, string> = {
 };
 
 export function WallNotice({
+  title = "",
   notice,
   links,
   style = "still",
@@ -41,6 +42,7 @@ export function WallNotice({
   size = "md",
   color = "muted",
 }: {
+  title?: string;
   notice: string;
   links: NoticeLink[];
   style?: NoticeStyle;
@@ -48,16 +50,31 @@ export function WallNotice({
   size?: NoticeSize;
   color?: NoticeColor;
 }) {
-  const text = notice.trim();
-  if (!text && links.length === 0) return null;
+  const header = title.trim();
+  const body = notice.trim();
+  if (!header && !body && links.length === 0) return null;
 
   return (
-    <div className="w-full min-w-0 flex flex-col gap-3 leading-relaxed border border-border/70 rounded-xl px-4 py-3">
-      {text ? (
-        <NoticeCopy text={text} style={style} font={font} size={size} color={color} />
+    <div className="w-full min-w-0 flex flex-col gap-2 leading-relaxed border border-border/70 rounded-xl px-4 py-3">
+      {header ? (
+        <p
+          data-testid="text-wall-notice-title"
+          className={cn(
+            "font-serif tracking-wide",
+            SIZE_CLASS[size],
+            COLOR_CLASS[color],
+            style === "blink" && "notice-blink",
+            style === "pulse" && "notice-pulse",
+          )}
+        >
+          {header}
+        </p>
+      ) : null}
+      {body ? (
+        <NoticeCopy text={body} style={style} font={font} size={size} color={color} />
       ) : null}
       {links.length > 0 ? (
-        <ul className="flex flex-col gap-2">
+        <ul className={cn("flex flex-col gap-2", (header || body) && "mt-1")}>
           {links.map((link, index) => {
             const file = noticeLinkIsFile(link);
             return (

@@ -86,6 +86,7 @@ export default function HearthPage() {
   const namesTapCount = useRef(0);
   const namesTapTimer = useRef<number | null>(null);
   const [notice, setNotice] = useState("");
+  const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeLinks, setNoticeLinks] = useState<DraftLink[]>(() => toDraftLinks([]));
   const [noticeStyle, setNoticeStyle] = useState<NoticeStyle>("still");
   const [noticeFont, setNoticeFont] = useState<NoticeFont>("sans");
@@ -111,6 +112,7 @@ export default function HearthPage() {
       ]);
       setOverview(nextOverview);
       setNotice(nextOverview.settings.notice);
+      setNoticeTitle(nextOverview.settings.noticeTitle ?? "");
       setNoticeLinks(toDraftLinks(nextOverview.settings.noticeLinks));
       setNoticeStyle(nextOverview.settings.noticeStyle);
       setNoticeFont(nextOverview.settings.noticeFont);
@@ -174,6 +176,7 @@ export default function HearthPage() {
       };
       setOverview((prev) => prev ? { ...prev, settings: data.settings, wall: data.wall } : prev);
       if (partial.notice !== undefined) setNotice(data.settings.notice);
+      if (partial.noticeTitle !== undefined) setNoticeTitle(data.settings.noticeTitle);
       if (partial.noticeLinks !== undefined) setNoticeLinks(toDraftLinks(data.settings.noticeLinks));
       if (partial.noticeStyle !== undefined) setNoticeStyle(data.settings.noticeStyle);
       if (partial.noticeFont !== undefined) setNoticeFont(data.settings.noticeFont);
@@ -637,6 +640,7 @@ export default function HearthPage() {
                   e.preventDefault();
                   void patch(
                     {
+                      noticeTitle,
                       notice,
                       noticeStyle,
                       noticeFont,
@@ -652,18 +656,34 @@ export default function HearthPage() {
                   );
                 }}
               >
-                <Label htmlFor="wall-notice" className="text-xs uppercase tracking-wider">
-                  Copy
-                </Label>
-                <Textarea
-                  id="wall-notice"
-                  value={notice}
-                  onChange={(e) => setNotice(e.target.value)}
-                  maxLength={280}
-                  placeholder="Optional. Shown above the pastes."
-                  className="min-h-[88px] bg-background"
-                  data-testid="input-wall-notice"
-                />
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="wall-notice-title" className="text-xs uppercase tracking-wider">
+                    Header
+                  </Label>
+                  <Input
+                    id="wall-notice-title"
+                    value={noticeTitle}
+                    onChange={(e) => setNoticeTitle(e.target.value)}
+                    maxLength={80}
+                    placeholder="Short headline"
+                    className="bg-background"
+                    data-testid="input-wall-notice-title"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="wall-notice" className="text-xs uppercase tracking-wider">
+                    Body
+                  </Label>
+                  <Textarea
+                    id="wall-notice"
+                    value={notice}
+                    onChange={(e) => setNotice(e.target.value)}
+                    maxLength={280}
+                    placeholder="Optional. Shown under the header."
+                    className="min-h-[88px] bg-background"
+                    data-testid="input-wall-notice"
+                  />
+                </div>
                 <div className="flex flex-col gap-2">
                   <p className="text-xs uppercase tracking-wider text-muted-foreground">How it moves</p>
                   <ChipRow
@@ -782,7 +802,8 @@ export default function HearthPage() {
                 <div className="flex flex-col gap-2 pt-1">
                   <p className="text-xs uppercase tracking-wider text-muted-foreground">Preview</p>
                   <WallNotice
-                    notice={notice.trim() || "The wall is listening."}
+                    title={noticeTitle.trim() || "Header"}
+                    notice={notice.trim() || "Body copy for the wall."}
                     links={sanitizeNoticeLinks(noticeLinks)}
                     style={noticeStyle}
                     font={noticeFont}

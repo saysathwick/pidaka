@@ -504,6 +504,7 @@ function toSettingsRow(next: WallSettings) {
     safetyCheckOpen: next.safetyCheckOpen,
     moderationKeywords: JSON.stringify(sanitizeModerationKeywords(next.moderationKeywords)),
     noticeOpen: next.noticeOpen,
+    noticeTitle: next.noticeTitle,
     notice: next.notice,
     noticeLinks: JSON.stringify(parseNoticeLinks(next.noticeLinks)),
     noticeStyle: parseNoticeStyle(next.noticeStyle),
@@ -528,6 +529,7 @@ function fromRow(row: {
   safetyCheckOpen?: boolean | null;
   moderationKeywords?: unknown;
   noticeOpen?: boolean | null;
+  noticeTitle?: string | null;
   notice: string;
   noticeLinks?: unknown;
   noticeStyle?: unknown;
@@ -550,6 +552,7 @@ function fromRow(row: {
     safetyCheckOpen: Boolean(row.safetyCheckOpen),
     moderationKeywords: parseModerationKeywords(row.moderationKeywords),
     noticeOpen: row.noticeOpen !== false,
+    noticeTitle: typeof row.noticeTitle === "string" ? row.noticeTitle : "",
     notice: row.notice,
     noticeLinks: parseNoticeLinks(row.noticeLinks),
     noticeStyle: parseNoticeStyle(row.noticeStyle),

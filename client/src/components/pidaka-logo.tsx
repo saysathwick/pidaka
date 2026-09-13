@@ -1,6 +1,4 @@
 import {
-  SITE_GREETING,
-  SITE_GREETING_SUB,
   SITE_NAME,
   SITE_TAGLINE_ACCENT,
   SITE_TAGLINE_LEAD,
@@ -110,15 +108,6 @@ export function PidakaTagline({ className, onDark }: PidakaLogoProps) {
       <span>{SITE_TAGLINE_LEAD} </span>
       <span className={onDark ? "text-primary" : "text-primary/90"}>{SITE_TAGLINE_ACCENT}</span>
     </p>
-  );
-}
-
-export function PidakaGreeting({ className }: PidakaLogoProps) {
-  return (
-    <div className={cn("flex flex-col gap-1 text-center sm:text-left", className)}>
-      <p className="font-serif text-lg tracking-wide text-foreground">{SITE_GREETING}</p>
-      <p className="text-sm text-muted-foreground">{SITE_GREETING_SUB}</p>
-    </div>
   );
 }
 

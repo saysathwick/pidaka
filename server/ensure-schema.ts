@@ -80,6 +80,7 @@ const statements = [
   )`,
   `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_links text NOT NULL DEFAULT '[]'`,
   `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_open boolean NOT NULL DEFAULT true`,
+  `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_title text NOT NULL DEFAULT ''`,
   `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_style text NOT NULL DEFAULT 'still'`,
   `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_font text NOT NULL DEFAULT 'sans'`,
   `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS notice_size text NOT NULL DEFAULT 'md'`,

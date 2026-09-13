@@ -59,6 +59,7 @@ export type WallSettings = {
   safetyCheckOpen: boolean;
   moderationKeywords: string[];
   noticeOpen: boolean;
+  noticeTitle: string;
   notice: string;
   noticeLinks: NoticeLink[];
   noticeStyle: NoticeStyle;
@@ -80,6 +81,7 @@ export type PublicWall = {
   posting: boolean;
   burning: boolean;
   noticeOpen: boolean;
+  noticeTitle: string;
   notice: string;
   noticeLinks: NoticeLink[];
   noticeStyle: NoticeStyle;

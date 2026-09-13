@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { SiteShell } from "@/components/site-shell";
-import { PidakaGreeting, PidakaMark } from "@/components/pidaka-logo";
+import { PidakaMark } from "@/components/pidaka-logo";
 import { PidakaCard, type PidakaItem } from "@/components/pidaka-card";
 import { ComposeFab, ComposeOverlay, PidakaComposer } from "@/components/pidaka-composer";
 import { BurnRitual } from "@/components/burn-ritual";
@@ -173,9 +173,9 @@ export default function WallPage() {
   return (
     <SiteShell place="wall" fetching={isFetching && !isLoading} paddedFooter>
       <main className="max-w-6xl mx-auto px-4 pt-6 pb-28 sm:pb-12 flex flex-col gap-5">
-        <PidakaGreeting className="rounded-xl border border-border/60 bg-card/40 px-4 py-4 backdrop-blur-sm" />
-        {wall && wall.noticeOpen && (wall.notice || wall.noticeLinks.length > 0) && (
+        {wall && wall.noticeOpen && (wall.noticeTitle || wall.notice || wall.noticeLinks.length > 0) && (
           <WallNotice
+            title={wall.noticeTitle}
             notice={wall.notice}
             links={wall.noticeLinks}
             style={wall.noticeStyle}

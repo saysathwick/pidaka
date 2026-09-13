@@ -3,7 +3,6 @@ export {
   PidakaWordmark,
   PidakaDomain,
   PidakaTagline,
-  PidakaGreeting,
   PidakaBrandLockup,
   CowDungCake,
   BurningCookieIcon,
