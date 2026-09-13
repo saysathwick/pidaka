@@ -5,7 +5,9 @@ import { queryClient } from "@/lib/queryClient";
 import { ThemeProvider } from "@/lib/theme";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
+import { Route, Switch } from "wouter";
 import HearthPage from "@/pages/hearth";
+import HearthUsersPage from "@/pages/hearth-users";
 import { initNativeChrome, useAndroidBackButton } from "@/lib/capacitor";
 import "./index.css";
 
@@ -21,7 +23,10 @@ function HearthApp() {
       <TooltipProvider delayDuration={200}>
         <ThemeProvider>
           <div className="app-shell min-h-screen bg-background wall-atmosphere">
-            <HearthPage />
+            <Switch>
+              <Route path="/hearth/users" component={HearthUsersPage} />
+              <Route component={HearthPage} />
+            </Switch>
           </div>
           <Toaster />
         </ThemeProvider>

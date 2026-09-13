@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Burn, InsertUser, Pidaka, User } from "@shared/schema";
 import { excerptPidaka } from "@shared/names";
-import type { WallSettings } from "@shared/wall";
+import type { WallSettings, PidakaStatus } from "@shared/wall";
+import { parseModerationKeywords, sanitizeModerationKeywords } from "@shared/moderation";
 import type { IStorage } from "./storage";
 import { blind } from "./crypto";
 import { revealUser, vaultUserInsert } from "./vault";
@@ -57,6 +58,8 @@ function seedDemoPidakas(): Pidaka[] {
       id: `demo-${index + 1}`,
       content,
       creatorUserId: creator,
+      status: "live",
+      flagReason: "",
       createdAt: hoursAgo(age),
       expiresAt: hoursFromNow(left),
     };
@@ -164,7 +167,7 @@ export class DemoStorage implements IStorage {
   async getActivePidakas() {
     const now = Date.now();
     return this.pidakas
-      .filter((p) => p.expiresAt.getTime() > now)
+      .filter((p) => p.expiresAt.getTime() > now && (p.status || "live") === "live")
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, 150);
   }
@@ -176,11 +179,17 @@ export class DemoStorage implements IStorage {
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  async createPidaka(content: string, creatorUserId: string) {
+  async createPidaka(
+    content: string,
+    creatorUserId: string,
+    opts?: { status?: PidakaStatus; flagReason?: string },
+  ) {
     const pidaka: Pidaka = {
       id: randomUUID(),
       content,
       creatorUserId,
+      status: opts?.status ?? "live",
+      flagReason: opts?.flagReason ?? "",
       createdAt: new Date(),
       expiresAt: hoursFromNow(48),
     };
@@ -190,6 +199,14 @@ export class DemoStorage implements IStorage {
 
   async getPidaka(id: string) {
     return this.pidakas.find((p) => p.id === id);
+  }
+
+  async setPidakaStatus(id: string, status: PidakaStatus, flagReason?: string) {
+    const pidaka = this.pidakas.find((p) => p.id === id);
+    if (!pidaka) return undefined;
+    pidaka.status = status;
+    if (flagReason !== undefined) pidaka.flagReason = flagReason;
+    return pidaka;
   }
 
   async deleteExpiredPidakas() {
@@ -330,6 +347,9 @@ export class DemoStorage implements IStorage {
     if (!this.wall) {
       this.wall = {
         ...seed,
+        guestLogin: seed.guestLogin ?? true,
+        safetyCheckOpen: seed.safetyCheckOpen ?? false,
+        moderationKeywords: sanitizeModerationKeywords(seed.moderationKeywords ?? []),
         noticeLinks: seed.noticeLinks ?? [],
         noticeStyle: seed.noticeStyle ?? "still",
         noticeFont: seed.noticeFont ?? "sans",
@@ -340,6 +360,9 @@ export class DemoStorage implements IStorage {
     }
     return {
       ...this.wall,
+      guestLogin: this.wall.guestLogin ?? true,
+      safetyCheckOpen: this.wall.safetyCheckOpen ?? false,
+      moderationKeywords: parseModerationKeywords(this.wall.moderationKeywords ?? []),
       noticeLinks: this.wall.noticeLinks ?? [],
       noticeStyle: this.wall.noticeStyle ?? "still",
       noticeFont: this.wall.noticeFont ?? "sans",
@@ -352,6 +375,9 @@ export class DemoStorage implements IStorage {
   async saveWallSettings(next: WallSettings) {
     this.wall = {
       ...next,
+      guestLogin: next.guestLogin ?? true,
+      safetyCheckOpen: next.safetyCheckOpen ?? false,
+      moderationKeywords: sanitizeModerationKeywords(next.moderationKeywords ?? []),
       noticeLinks: next.noticeLinks ?? [],
       noticeStyle: next.noticeStyle ?? "still",
       noticeFont: next.noticeFont ?? "sans",
@@ -366,7 +392,7 @@ export class DemoStorage implements IStorage {
     const now = Date.now();
     return {
       users: this.users.size,
-      pidakas: this.pidakas.filter((p) => p.expiresAt.getTime() > now).length,
+      pidakas: this.pidakas.filter((p) => p.expiresAt.getTime() > now && (p.status || "live") === "live").length,
       burns: this.burns.length,
     };
   }
@@ -383,6 +409,8 @@ export class DemoStorage implements IStorage {
         createdAt: p.createdAt,
         expiresAt: p.expiresAt,
         creatorUserId: p.creatorUserId,
+        status: (p.status || "live") as PidakaStatus,
+        flagReason: p.flagReason || "",
         anonymousName: this.users.get(p.creatorUserId)?.anonymousName || p.creatorUserId,
       }));
   }

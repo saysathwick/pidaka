@@ -14,6 +14,7 @@ import InboxPage from "@/pages/inbox";
 import NotFound from "@/pages/not-found";
 import AboutPage from "@/pages/about";
 import HearthPage from "@/pages/hearth";
+import HearthUsersPage from "@/pages/hearth-users";
 import { usePageMeta } from "@/lib/page-meta";
 import { CinematicIntro, shouldPlayIntro } from "@/components/cinematic-intro";
 import { NameReveal } from "@/components/name-reveal";
@@ -42,9 +43,10 @@ function AppContent() {
   const [location] = useLocation();
   const [introDone, setIntroDone] = useState(() => !shouldPlayIntro());
   usePageMeta(location);
-  const onHearth = location === "/hearth";
+  const onHearth = location === "/hearth" || location === "/hearth/users";
 
   if (onHearth) {
+    if (location === "/hearth/users") return <HearthUsersPage />;
     return <HearthPage />;
   }
 
@@ -92,6 +94,7 @@ function AppContent() {
             <Route path="/privacy" component={AboutPage} />
             <Route path="/terms" component={AboutPage} />
             <Route path="/contact" component={AboutPage} />
+            <Route path="/hearth/users" component={HearthUsersPage} />
             <Route path="/hearth" component={HearthPage} />
             <Route component={NotFound} />
           </Switch>

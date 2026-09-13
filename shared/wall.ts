@@ -52,9 +52,12 @@ export type WallSettings = {
   appleLogin: boolean;
   phoneLogin: boolean;
   emailLogin: boolean;
+  guestLogin: boolean;
   registrationsOpen: boolean;
   postingOpen: boolean;
   burningOpen: boolean;
+  safetyCheckOpen: boolean;
+  moderationKeywords: string[];
   noticeOpen: boolean;
   notice: string;
   noticeLinks: NoticeLink[];
@@ -72,6 +75,7 @@ export type PublicWall = {
   apple: boolean;
   phone: boolean;
   email: boolean;
+  guest: boolean;
   registrations: boolean;
   posting: boolean;
   burning: boolean;
@@ -89,6 +93,8 @@ export type PublicWall = {
   appleReady: boolean;
 };
 
+export type PidakaStatus = "live" | "pending" | "rejected" | "removed";
+
 export type AdminPidaka = {
   id: string;
   content: string;
@@ -96,6 +102,8 @@ export type AdminPidaka = {
   expiresAt: string;
   creatorUserId: string;
   anonymousName: string;
+  status: PidakaStatus;
+  flagReason: string;
 };
 
 export type AdminUser = {
@@ -118,7 +126,13 @@ export type AdminStats = {
 export const WALL_SETTINGS_ID = "wall";
 
 export function settingsHaveADoor(settings: WallSettings) {
-  return settings.googleLogin || settings.appleLogin || settings.phoneLogin || settings.emailLogin;
+  return (
+    settings.googleLogin ||
+    settings.appleLogin ||
+    settings.phoneLogin ||
+    settings.emailLogin ||
+    settings.guestLogin
+  );
 }
 
 const FILE_EXT =

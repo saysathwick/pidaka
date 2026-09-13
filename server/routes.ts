@@ -39,26 +39,38 @@ import {
   signAppToken,
   signOAuthState,
 } from "./identity";
-import { adminMiddleware, adminSecret, secretsEqual, signAdminToken, type AdminRequest } from "./admin";
+import {
+  adminMiddleware,
+  adminSecret,
+  hearthUsersMiddleware,
+  hearthUsersSecret,
+  secretsEqual,
+  signAdminToken,
+  signHearthUsersToken,
+  type AdminRequest,
+} from "./admin";
 import { readPublicWall, readWallSettings, toPublicWall } from "./wall-settings";
 import { parseNoticeColor, parseNoticeFont, parseNoticeSize, parseNoticeStyle, sanitizeNoticeLinks, settingsHaveADoor } from "@shared/wall";
+import { matchModerationKeywords, sanitizeModerationKeywords } from "@shared/moderation";
+import { sanitizeBurnAlertBodyMany, sanitizeBurnAlertBodyOne, sanitizeBurnAlertTitle } from "@shared/burn-alert";
 import { generateAnonymousName } from "@shared/names";
 import { log } from "./index";
 import { appAuthBridgeHtml, appAuthBridgePath, appAuthBridgeQuery } from "./app-auth";
 import {
   clearHearthCookie,
+  clearHearthUsersCookie,
   clearSessionCookie,
   limitAuth,
   limitHearth,
   limitPush,
   readSessionToken,
   setHearthCookie,
+  setHearthUsersCookie,
   setSessionCookie,
 } from "./http-security";
 import { mailDomainLooksReal } from "./mail-domain";
 import { burnAlertsReady, notifyBurnArrived, vapidPublicKey } from "./push";
 import { fcmReady } from "./fcm";
-import { sanitizeBurnAlertBodyMany, sanitizeBurnAlertBodyOne, sanitizeBurnAlertTitle } from "@shared/burn-alert";
 
 if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET environment variable must be set");
@@ -174,6 +186,27 @@ export async function registerRoutes(
     return res.json({ ok: true });
   });
 
+  app.post("/api/admin/users/session", limitHearth, async (req: Request, res: Response) => {
+    const expected = hearthUsersSecret();
+    if (!expected) {
+      return res.status(503).json({ message: "Set HEARTH_USERS_SECRET on this wall first" });
+    }
+    const parsed = adminSessionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0].message });
+    }
+    if (!secretsEqual(parsed.data.secret, expected)) {
+      return res.status(401).json({ message: "That key does not open the vault" });
+    }
+    setHearthUsersCookie(res, signHearthUsersToken());
+    return res.json({ ok: true });
+  });
+
+  app.post("/api/admin/users/logout", (_req: Request, res: Response) => {
+    clearHearthUsersCookie(res);
+    return res.json({ ok: true });
+  });
+
   app.get("/api/admin/overview", adminMiddleware as any, async (_req: AdminRequest, res: Response) => {
     try {
       const settings = await readWallSettings();
@@ -230,6 +263,10 @@ export async function registerRoutes(
           parsed.data.burnAlertBodyMany !== undefined
             ? sanitizeBurnAlertBodyMany(parsed.data.burnAlertBodyMany)
             : current.burnAlertBodyMany,
+        moderationKeywords:
+          parsed.data.moderationKeywords !== undefined
+            ? sanitizeModerationKeywords(parsed.data.moderationKeywords)
+            : current.moderationKeywords,
       };
       if (!settingsHaveADoor(next)) {
         return res.status(400).json({ message: "Leave at least one way in" });
@@ -249,6 +286,8 @@ export async function registerRoutes(
       const rows = await storage.listAdminPidakas();
       return res.json(rows.map((row) => ({
         ...row,
+        status: row.status || "live",
+        flagReason: row.flagReason || "",
         createdAt: row.createdAt.toISOString(),
         expiresAt: row.expiresAt.toISOString(),
       })));
@@ -257,19 +296,47 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/admin/pidakas/:id/approve", adminMiddleware as any, async (req: AdminRequest, res: Response) => {
+    try {
+      const id = pidakaParam(req);
+      if (!id) return res.status(400).json({ message: "Pidaka id is required" });
+      const existing = await storage.getPidaka(id);
+      if (!existing) return res.status(404).json({ message: "Pidaka not found" });
+      const updated = await storage.setPidakaStatus(id, "live", "");
+      if (!updated) return res.status(404).json({ message: "Pidaka not found" });
+      return res.json({ ok: true, status: "live" });
+    } catch (err) {
+      return serverError(res, "Failed to approve that pidaka", err);
+    }
+  });
+
+  app.post("/api/admin/pidakas/:id/reject", adminMiddleware as any, async (req: AdminRequest, res: Response) => {
+    try {
+      const id = pidakaParam(req);
+      if (!id) return res.status(400).json({ message: "Pidaka id is required" });
+      const existing = await storage.getPidaka(id);
+      if (!existing) return res.status(404).json({ message: "Pidaka not found" });
+      const updated = await storage.setPidakaStatus(id, "rejected");
+      if (!updated) return res.status(404).json({ message: "Pidaka not found" });
+      return res.json({ ok: true, status: "rejected" });
+    } catch (err) {
+      return serverError(res, "Failed to reject that pidaka", err);
+    }
+  });
+
   app.delete("/api/admin/pidakas/:id", adminMiddleware as any, async (req: AdminRequest, res: Response) => {
     try {
       const id = pidakaParam(req);
       if (!id) return res.status(400).json({ message: "Pidaka id is required" });
-      const removed = await storage.deletePidaka(id);
-      if (!removed) return res.status(404).json({ message: "Pidaka not found" });
-      return res.json({ ok: true });
+      const updated = await storage.setPidakaStatus(id, "removed");
+      if (!updated) return res.status(404).json({ message: "Pidaka not found" });
+      return res.json({ ok: true, status: "removed" });
     } catch (err) {
       return serverError(res, "Failed to take down that pidaka", err);
     }
   });
 
-  app.get("/api/admin/users", adminMiddleware as any, async (_req: AdminRequest, res: Response) => {
+  app.get("/api/admin/users", hearthUsersMiddleware as any, async (_req: AdminRequest, res: Response) => {
     try {
       const rows = await storage.listAdminUsers();
       return res.json(rows.map((row) => ({
@@ -371,6 +438,9 @@ export async function registerRoutes(
   app.post("/api/auth/guest", limitAuth, async (req: Request, res: Response) => {
     try {
       const wall = await readPublicWall();
+      if (!wall.guest) {
+        return res.status(403).json({ message: "Guest names are closed tonight" });
+      }
       if (!wall.registrations) {
         return res.status(403).json({ message: "The wall is not taking names tonight" });
       }
@@ -807,8 +877,8 @@ export async function registerRoutes(
 
   app.post("/api/pidakas", authMiddleware as any, async (req: AuthRequest, res: Response) => {
     try {
-      const wall = await readPublicWall();
-      if (!wall.posting) {
+      const settings = await readWallSettings();
+      if (!settings.postingOpen) {
         return res.status(403).json({ message: "The wall is not taking pastes tonight" });
       }
       const parsed = insertPidakaSchema.safeParse(req.body);
@@ -816,10 +886,24 @@ export async function registerRoutes(
         return res.status(400).json({ message: parsed.error.errors[0].message });
       }
 
-      const pidaka = await storage.createPidaka(parsed.data.content, req.userId!);
+      let status: "live" | "pending" = "live";
+      let flagReason = "";
+      if (settings.safetyCheckOpen) {
+        const hits = matchModerationKeywords(parsed.data.content, settings.moderationKeywords);
+        if (hits.length > 0) {
+          status = "pending";
+          flagReason = hits.slice(0, 8).join(", ");
+        }
+      }
+
+      const pidaka = await storage.createPidaka(parsed.data.content, req.userId!, {
+        status,
+        flagReason,
+      });
       return res.status(201).json({
         id: pidaka.id,
         content: pidaka.content,
+        status: pidaka.status,
         createdAt: pidaka.createdAt,
         expiresAt: pidaka.expiresAt,
       });
@@ -845,7 +929,7 @@ export async function registerRoutes(
       }
 
       const pidaka = await storage.getPidaka(pidakaId);
-      if (!pidaka) {
+      if (!pidaka || pidaka.status !== "live") {
         return res.status(404).json({ message: "Pidaka not found" });
       }
 

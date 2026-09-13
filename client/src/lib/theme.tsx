@@ -42,7 +42,7 @@ const ThemeContext = createContext<ThemeContextType | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const hearth = location === "/hearth" || isHearthApp();
+  const hearth = location === "/hearth" || location === "/hearth/users" || isHearthApp();
   const [wallTheme, setWallTheme] = useState<Theme>(() => readTheme("pidaka_theme"));
   const [wallAccent, setWallAccent] = useState<AccentId>(() => readAccent("pidaka_accent"));
   const [hearthTheme, setHearthTheme] = useState<Theme>(() => readTheme("pidaka_hearth_theme"));

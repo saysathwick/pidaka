@@ -67,6 +67,7 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
 
 const SESSION_COOKIE = "pidaka_session";
 const HEARTH_COOKIE = "pidaka_hearth";
+const HEARTH_USERS_COOKIE = "pidaka_hearth_users";
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60;
 const HEARTH_MAX_AGE = 12 * 60 * 60;
 
@@ -142,4 +143,16 @@ export function readSessionToken(req: Request) {
 
 export function readHearthToken(req: Request) {
   return readCookie(req, HEARTH_COOKIE) || bearerToken(req);
+}
+
+export function setHearthUsersCookie(res: Response, token: string) {
+  writeCookie(res, serializeCookie(HEARTH_USERS_COOKIE, token, HEARTH_MAX_AGE, res));
+}
+
+export function clearHearthUsersCookie(res: Response) {
+  writeCookie(res, serializeCookie(HEARTH_USERS_COOKIE, "", 0, res));
+}
+
+export function readHearthUsersToken(req: Request) {
+  return readCookie(req, HEARTH_USERS_COOKIE) || bearerToken(req);
 }

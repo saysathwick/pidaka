@@ -238,7 +238,7 @@ export function AuthForm() {
 
       {step === "choose" && (
         <div className="flex flex-col gap-2.5">
-          {wall && !wall.google && !wall.apple && !wall.phone && !wall.email && (
+          {wall && !wall.google && !wall.apple && !wall.phone && !wall.email && !wall.guest && (
             <p className="text-center text-sm text-muted-foreground">
               The wall is not taking anyone in tonight.
             </p>
@@ -313,36 +313,40 @@ export function AuthForm() {
               Continue with email
             </Button>
           )}
-          <div className="relative my-1 flex items-center gap-3">
-            <span className="h-px flex-1 bg-border/70" />
-            <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">or</span>
-            <span className="h-px flex-1 bg-border/70" />
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-11 text-muted-foreground hover:text-foreground"
-            disabled={loading !== null}
-            onClick={() => {
-              setFormError(null);
-              if (wall?.registrations === false) {
-                browseAsGuest();
-                toast({
-                  title: "Guest names are closed",
-                  description: "You can still read the wall tonight.",
-                });
-                return;
-              }
-              setSaidOrigin("");
-              setStep("guest-origin");
-            }}
-            data-testid="button-auth-guest"
-          >
-            Continue as guest
-          </Button>
-          <p className="text-center text-[11px] leading-relaxed text-muted-foreground -mt-1">
-            Read free, or share where you are from and location to take a name.
-          </p>
+          {(!wall || wall.guest) && (
+            <>
+              <div className="relative my-1 flex items-center gap-3">
+                <span className="h-px flex-1 bg-border/70" />
+                <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">or</span>
+                <span className="h-px flex-1 bg-border/70" />
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 text-muted-foreground hover:text-foreground"
+                disabled={loading !== null}
+                onClick={() => {
+                  setFormError(null);
+                  if (wall?.registrations === false) {
+                    browseAsGuest();
+                    toast({
+                      title: "Guest names are closed",
+                      description: "You can still read the wall tonight.",
+                    });
+                    return;
+                  }
+                  setSaidOrigin("");
+                  setStep("guest-origin");
+                }}
+                data-testid="button-auth-guest"
+              >
+                Continue as guest
+              </Button>
+              <p className="text-center text-[11px] leading-relaxed text-muted-foreground -mt-1">
+                Read free, or share where you are from and location to take a name.
+              </p>
+            </>
+          )}
         </div>
       )}
 

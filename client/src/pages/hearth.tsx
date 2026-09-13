@@ -30,7 +30,6 @@ import { fireEmberBurst } from "@/lib/ember-burst";
 import type {
   AdminPidaka,
   AdminStats,
-  AdminUser,
   NoticeColor,
   NoticeFont,
   NoticeLink,
@@ -84,7 +83,8 @@ export default function HearthPage() {
   const [open, setOpen] = useState(false);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [pidakas, setPidakas] = useState<AdminPidaka[]>([]);
-  const [users, setUsers] = useState<AdminUser[]>([]);
+  const namesTapCount = useRef(0);
+  const namesTapTimer = useRef<number | null>(null);
   const [notice, setNotice] = useState("");
   const [noticeLinks, setNoticeLinks] = useState<DraftLink[]>(() => toDraftLinks([]));
   const [noticeStyle, setNoticeStyle] = useState<NoticeStyle>("still");
@@ -94,6 +94,7 @@ export default function HearthPage() {
   const [burnAlertTitle, setBurnAlertTitle] = useState(defaultBurnAlertTemplate().burnAlertTitle);
   const [burnAlertBodyOne, setBurnAlertBodyOne] = useState(defaultBurnAlertTemplate().burnAlertBodyOne);
   const [burnAlertBodyMany, setBurnAlertBodyMany] = useState(defaultBurnAlertTemplate().burnAlertBodyMany);
+  const [keywordsDraft, setKeywordsDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [leaveOpen, setLeaveOpen] = useState(false);
@@ -104,10 +105,9 @@ export default function HearthPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [nextOverview, nextPidakas, nextUsers] = await Promise.all([
+      const [nextOverview, nextPidakas] = await Promise.all([
         hearthRequest("GET", "/api/admin/overview") as Promise<Overview>,
         hearthRequest("GET", "/api/admin/pidakas") as Promise<AdminPidaka[]>,
-        hearthRequest("GET", "/api/admin/users") as Promise<AdminUser[]>,
       ]);
       setOverview(nextOverview);
       setNotice(nextOverview.settings.notice);
@@ -119,8 +119,8 @@ export default function HearthPage() {
       setBurnAlertTitle(nextOverview.settings.burnAlertTitle ?? defaultBurnAlertTemplate().burnAlertTitle);
       setBurnAlertBodyOne(nextOverview.settings.burnAlertBodyOne ?? defaultBurnAlertTemplate().burnAlertBodyOne);
       setBurnAlertBodyMany(nextOverview.settings.burnAlertBodyMany ?? defaultBurnAlertTemplate().burnAlertBodyMany);
+      setKeywordsDraft((nextOverview.settings.moderationKeywords ?? []).join("\n"));
       setPidakas(nextPidakas);
-      setUsers(nextUsers);
       setOpen(true);
     } catch (err) {
       const status = (err as Error & { status?: number }).status;
@@ -162,7 +162,10 @@ export default function HearthPage() {
     }
   };
 
-  const patch = async (partial: Partial<WallSettings>, kind: "settings" | "notice" | "burn-alerts" = "settings") => {
+  const patch = async (
+    partial: Partial<WallSettings>,
+    kind: "settings" | "notice" | "burn-alerts" | "safety" = "settings",
+  ) => {
     setBusy(kind);
     try {
       const data = await hearthRequest("PATCH", "/api/admin/settings", partial) as {
@@ -179,6 +182,9 @@ export default function HearthPage() {
       if (partial.burnAlertTitle !== undefined) setBurnAlertTitle(data.settings.burnAlertTitle);
       if (partial.burnAlertBodyOne !== undefined) setBurnAlertBodyOne(data.settings.burnAlertBodyOne);
       if (partial.burnAlertBodyMany !== undefined) setBurnAlertBodyMany(data.settings.burnAlertBodyMany);
+      if (partial.moderationKeywords !== undefined) {
+        setKeywordsDraft((data.settings.moderationKeywords ?? []).join("\n"));
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/wall"] });
       queryClient.invalidateQueries({ queryKey: ["/api/pidakas"] });
       if (kind === "notice") {
@@ -189,6 +195,9 @@ export default function HearthPage() {
       }
       if (kind === "burn-alerts") {
         toast({ title: "Burn alerts updated" });
+      }
+      if (kind === "safety") {
+        toast({ title: "Safety check updated" });
       }
     } catch (err) {
       toast({
@@ -205,7 +214,7 @@ export default function HearthPage() {
     setBusy(id);
     try {
       await hearthRequest("DELETE", `/api/admin/pidakas/${id}`);
-      setPidakas((prev) => prev.filter((row) => row.id !== id));
+      setPidakas((prev) => prev.map((row) => (row.id === id ? { ...row, status: "removed" as const } : row)));
       setOverview((prev) => prev
         ? { ...prev, stats: { ...prev.stats, pidakas: Math.max(0, prev.stats.pidakas - 1) } }
         : prev);
@@ -214,6 +223,46 @@ export default function HearthPage() {
     } catch (err) {
       toast({
         title: "It stayed on the wall",
+        description: err instanceof Error ? err.message : "Try again",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const approvePidaka = async (id: string) => {
+    setBusy(id);
+    try {
+      await hearthRequest("POST", `/api/admin/pidakas/${id}/approve`);
+      setPidakas((prev) =>
+        prev.map((row) => (row.id === id ? { ...row, status: "live" as const, flagReason: "" } : row)),
+      );
+      setOverview((prev) =>
+        prev ? { ...prev, stats: { ...prev.stats, pidakas: prev.stats.pidakas + 1 } } : prev,
+      );
+      queryClient.invalidateQueries({ queryKey: ["/api/pidakas"] });
+      toast({ title: "On the wall" });
+    } catch (err) {
+      toast({
+        title: "Could not approve",
+        description: err instanceof Error ? err.message : "Try again",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const rejectPidaka = async (id: string) => {
+    setBusy(id);
+    try {
+      await hearthRequest("POST", `/api/admin/pidakas/${id}/reject`);
+      setPidakas((prev) => prev.map((row) => (row.id === id ? { ...row, status: "rejected" as const } : row)));
+      toast({ title: "Rejected" });
+    } catch (err) {
+      toast({
+        title: "Could not reject",
         description: err instanceof Error ? err.message : "Try again",
         variant: "destructive",
       });
@@ -236,7 +285,6 @@ export default function HearthPage() {
     setOpen(false);
     setOverview(null);
     setPidakas([]);
-    setUsers([]);
     setLeaving(false);
     setLeaveOpen(false);
   };
@@ -358,7 +406,21 @@ export default function HearthPage() {
         {overview && (
           <>
             <section className="grid grid-cols-3 gap-3">
-              <Stat label="Names" value={overview.stats.users} />
+              <Stat
+                label="Names"
+                value={overview.stats.users}
+                onActivate={() => {
+                  namesTapCount.current += 1;
+                  if (namesTapTimer.current) window.clearTimeout(namesTapTimer.current);
+                  namesTapTimer.current = window.setTimeout(() => {
+                    namesTapCount.current = 0;
+                  }, 900);
+                  if (namesTapCount.current >= 3) {
+                    namesTapCount.current = 0;
+                    navigate("/hearth/users");
+                  }
+                }}
+              />
               <Stat label="Live pidakas" value={overview.stats.pidakas} />
               <Stat label="Burns" value={overview.stats.burns} />
             </section>
@@ -396,6 +458,13 @@ export default function HearthPage() {
                 disabled={busy === "settings"}
                 onCheckedChange={(emailLogin) => void patch({ emailLogin })}
               />
+              <Door
+                label="Guest"
+                hint="Continue as guest. Still needs new names open."
+                checked={overview.settings.guestLogin}
+                disabled={busy === "settings"}
+                onCheckedChange={(guestLogin) => void patch({ guestLogin })}
+              />
             </section>
 
             <section className="flex flex-col gap-4 rounded-xl border border-border bg-card/60 p-5">
@@ -420,6 +489,60 @@ export default function HearthPage() {
                 disabled={busy === "settings"}
                 onCheckedChange={(burningOpen) => void patch({ burningOpen })}
               />
+            </section>
+
+            <section className="flex flex-col gap-4 rounded-xl border border-border bg-card/60 p-5">
+              <div>
+                <h2 className="font-serif text-2xl">Safety</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Keyword check only. Named people can always paste. Hits wait here until you allow them.
+                </p>
+              </div>
+              <Door
+                label="Keyword check"
+                hint="Off = everything goes live. On = only keyword hits are held."
+                checked={overview.settings.safetyCheckOpen}
+                disabled={busy === "settings" || busy === "safety"}
+                onCheckedChange={(safetyCheckOpen) => void patch({ safetyCheckOpen })}
+              />
+              <form
+                className="flex flex-col gap-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const moderationKeywords = keywordsDraft
+                    .split(/[\n,]+/)
+                    .map((w) => w.trim())
+                    .filter(Boolean);
+                  void patch({ moderationKeywords }, "safety");
+                }}
+              >
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="safety-keywords" className="text-xs uppercase tracking-wider">
+                    Keywords
+                  </Label>
+                  <Textarea
+                    id="safety-keywords"
+                    rows={5}
+                    value={keywordsDraft}
+                    onChange={(e) => setKeywordsDraft(e.target.value)}
+                    placeholder={"one word per line\nor comma,separated"}
+                    className="font-mono text-sm"
+                    data-testid="input-safety-keywords"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Case-insensitive. Substring match. Empty list = nothing held while check is on.
+                  </p>
+                </div>
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  className="self-start"
+                  disabled={busy === "settings" || busy === "safety"}
+                  data-testid="button-keep-keywords"
+                >
+                  {busy === "safety" ? "Keeping..." : "Keep keywords"}
+                </Button>
+              </form>
             </section>
 
             <section className="flex flex-col gap-4 rounded-xl border border-border bg-card/60 p-5">
@@ -681,12 +804,60 @@ export default function HearthPage() {
             </section>
 
             <section className="flex flex-col gap-4">
+              <h2 className="font-serif text-2xl">Suspected</h2>
+              {pidakas.filter((row) => row.status === "pending").length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nothing waiting.</p>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {pidakas
+                    .filter((row) => row.status === "pending")
+                    .map((row) => (
+                      <li
+                        key={row.id}
+                        className="flex flex-col gap-3 rounded-xl border border-border bg-card/60 p-4 sm:flex-row sm:items-start sm:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm leading-relaxed">{excerpt(row.content)}</p>
+                          <p className="mt-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            {row.anonymousName}
+                            {row.flagReason ? ` · ${row.flagReason}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={busy === row.id}
+                            onClick={() => void approvePidaka(row.id)}
+                            data-testid={`button-approve-${row.id}`}
+                          >
+                            Allow
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={busy === row.id}
+                            onClick={() => void rejectPidaka(row.id)}
+                            data-testid={`button-reject-${row.id}`}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </section>
+
+            <section className="flex flex-col gap-4">
               <h2 className="font-serif text-2xl">Live pidakas</h2>
-              {pidakas.length === 0 ? (
+              {pidakas.filter((row) => row.status === "live" || !row.status).length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nothing on the plaster.</p>
               ) : (
                 <ul className="flex flex-col gap-3">
-                  {pidakas.map((row) => (
+                  {pidakas
+                    .filter((row) => row.status === "live" || !row.status)
+                    .map((row) => (
                     <li key={row.id} className="flex flex-col gap-3 rounded-xl border border-border bg-card/60 p-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <p className="text-sm leading-relaxed">{excerpt(row.content)}</p>
@@ -709,33 +880,6 @@ export default function HearthPage() {
               )}
             </section>
 
-            <section className="flex flex-col gap-4">
-              <h2 className="font-serif text-2xl">Names</h2>
-              {users.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nobody has been named yet.</p>
-              ) : (
-                <ul className="flex flex-col divide-y divide-border/70 rounded-xl border border-border bg-card/60">
-                  {users.map((user) => (
-                    <li key={user.id} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-baseline sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="font-serif">{user.anonymousName}</p>
-                        {user.saidOrigin ? (
-                          <p className="mt-1 text-xs text-muted-foreground">Said: {user.saidOrigin}</p>
-                        ) : null}
-                        {user.locationJson ? (
-                          <p className="mt-0.5 break-all text-[10px] text-muted-foreground/80">
-                            Place: {user.locationJson}
-                          </p>
-                        ) : null}
-                      </div>
-                      <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                        {user.authProvider} · {user.email}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
           </>
         )}
       </main>
@@ -743,9 +887,32 @@ export default function HearthPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({
+  label,
+  value,
+  onActivate,
+}: {
+  label: string;
+  value: number;
+  onActivate?: () => void;
+}) {
   return (
-    <div className="rounded-xl border border-border bg-card/60 px-4 py-4">
+    <div
+      className="rounded-xl border border-border bg-card/60 px-4 py-4"
+      onClick={onActivate}
+      onKeyDown={
+        onActivate
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onActivate();
+              }
+            }
+          : undefined
+      }
+      role={onActivate ? "button" : undefined}
+      tabIndex={onActivate ? 0 : undefined}
+    >
       <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
       <p className="mt-1 font-serif text-3xl">{value}</p>
     </div>

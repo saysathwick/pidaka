@@ -87,6 +87,11 @@ const statements = [
   `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS burn_alert_title text NOT NULL DEFAULT 'Pidaka'`,
   `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS burn_alert_body_one text NOT NULL DEFAULT 'A burn arrived.'`,
   `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS burn_alert_body_many text NOT NULL DEFAULT '{n} burns are waiting.'`,
+  `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS guest_login boolean NOT NULL DEFAULT true`,
+  `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS safety_check_open boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS moderation_keywords text NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE pidakas ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'live'`,
+  `ALTER TABLE pidakas ADD COLUMN IF NOT EXISTS flag_reason text NOT NULL DEFAULT ''`,
 ];
 
 export async function ensureSchema(): Promise<void> {

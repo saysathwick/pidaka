@@ -77,10 +77,17 @@ export default function WallPage() {
       const res = await apiRequest("POST", "/api/pidakas", { content });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: { status?: string }) => {
       setNewContent("");
       setComposeOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/pidakas"] });
+      if (data?.status === "pending") {
+        toast({
+          title: "Waiting at the hearth",
+          description: "Your pidaka is held until the keeper allows it.",
+        });
+        return;
+      }
       toast({ title: "On the wall" });
     },
     onError: (err: Error) => {

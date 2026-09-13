@@ -16,7 +16,8 @@ import {
   type Pidaka,
   type Burn,
 } from "@shared/schema";
-import { parseNoticeColor, parseNoticeFont, parseNoticeLinks, parseNoticeSize, parseNoticeStyle, WALL_SETTINGS_ID, type WallSettings } from "@shared/wall";
+import { parseNoticeColor, parseNoticeFont, parseNoticeLinks, parseNoticeSize, parseNoticeStyle, WALL_SETTINGS_ID, type PidakaStatus, type WallSettings } from "@shared/wall";
+import { parseModerationKeywords, sanitizeModerationKeywords } from "@shared/moderation";
 import { blind, isBlind, seal } from "./crypto";
 import { revealBurn, revealPidaka, revealUser, vaultUserInsert } from "./vault";
 
@@ -35,8 +36,13 @@ export interface IStorage {
 
   getActivePidakas(): Promise<Pidaka[]>;
   getPidakasByCreator(userId: string): Promise<Pidaka[]>;
-  createPidaka(content: string, creatorUserId: string): Promise<Pidaka>;
+  createPidaka(
+    content: string,
+    creatorUserId: string,
+    opts?: { status?: PidakaStatus; flagReason?: string },
+  ): Promise<Pidaka>;
   getPidaka(id: string): Promise<Pidaka | undefined>;
+  setPidakaStatus(id: string, status: PidakaStatus, flagReason?: string): Promise<Pidaka | undefined>;
   deletePidaka(id: string): Promise<boolean>;
   deleteExpiredPidakas(): Promise<void>;
 
@@ -68,6 +74,8 @@ export interface IStorage {
     expiresAt: Date;
     creatorUserId: string;
     anonymousName: string;
+    status: PidakaStatus;
+    flagReason: string;
   }>>;
   listAdminUsers(): Promise<Array<{
     id: string;
@@ -153,7 +161,7 @@ export class DatabaseStorage implements IStorage {
     const rows = await db
       .select()
       .from(pidakas)
-      .where(sql`${pidakas.expiresAt} > ${now}`)
+      .where(and(sql`${pidakas.expiresAt} > ${now}`, eq(pidakas.status, "live")))
       .orderBy(desc(pidakas.createdAt))
       .limit(150);
     return rows.map(revealPidaka);
@@ -169,18 +177,40 @@ export class DatabaseStorage implements IStorage {
     return rows.map(revealPidaka);
   }
 
-  async createPidaka(content: string, creatorUserId: string): Promise<Pidaka> {
+  async createPidaka(
+    content: string,
+    creatorUserId: string,
+    opts?: { status?: PidakaStatus; flagReason?: string },
+  ): Promise<Pidaka> {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
     const [pidaka] = await db
       .insert(pidakas)
-      .values({ content: seal(content), creatorUserId, expiresAt })
+      .values({
+        content: seal(content),
+        creatorUserId,
+        expiresAt,
+        status: opts?.status ?? "live",
+        flagReason: opts?.flagReason ?? "",
+      })
       .returning();
     return revealPidaka(pidaka);
   }
 
   async getPidaka(id: string): Promise<Pidaka | undefined> {
     const [pidaka] = await db.select().from(pidakas).where(eq(pidakas.id, id));
+    return pidaka ? revealPidaka(pidaka) : undefined;
+  }
+
+  async setPidakaStatus(id: string, status: PidakaStatus, flagReason?: string): Promise<Pidaka | undefined> {
+    const [pidaka] = await db
+      .update(pidakas)
+      .set({
+        status,
+        ...(flagReason !== undefined ? { flagReason } : {}),
+      })
+      .where(eq(pidakas.id, id))
+      .returning();
     return pidaka ? revealPidaka(pidaka) : undefined;
   }
 
@@ -407,7 +437,7 @@ export class DatabaseStorage implements IStorage {
     const [pidakaRow] = await db
       .select({ count: sql<number>`count(*)` })
       .from(pidakas)
-      .where(sql`${pidakas.expiresAt} > ${now}`);
+      .where(and(sql`${pidakas.expiresAt} > ${now}`, eq(pidakas.status, "live")));
     const [burnRow] = await db.select({ count: sql<number>`count(*)` }).from(burns);
     return {
       users: Number(usersRow?.count ?? 0),
@@ -425,6 +455,8 @@ export class DatabaseStorage implements IStorage {
         createdAt: pidakas.createdAt,
         expiresAt: pidakas.expiresAt,
         creatorUserId: pidakas.creatorUserId,
+        status: pidakas.status,
+        flagReason: pidakas.flagReason,
         anonymousName: users.anonymousName,
       })
       .from(pidakas)
@@ -435,6 +467,8 @@ export class DatabaseStorage implements IStorage {
     return rows.map((row) => ({
       ...row,
       content: revealPidaka(row).content,
+      status: (row.status || "live") as PidakaStatus,
+      flagReason: row.flagReason || "",
       anonymousName: row.anonymousName || "unnamed",
     }));
   }
@@ -463,9 +497,12 @@ function toSettingsRow(next: WallSettings) {
     appleLogin: next.appleLogin,
     phoneLogin: next.phoneLogin,
     emailLogin: next.emailLogin,
+    guestLogin: next.guestLogin,
     registrationsOpen: next.registrationsOpen,
     postingOpen: next.postingOpen,
     burningOpen: next.burningOpen,
+    safetyCheckOpen: next.safetyCheckOpen,
+    moderationKeywords: JSON.stringify(sanitizeModerationKeywords(next.moderationKeywords)),
     noticeOpen: next.noticeOpen,
     notice: next.notice,
     noticeLinks: JSON.stringify(parseNoticeLinks(next.noticeLinks)),
@@ -484,9 +521,12 @@ function fromRow(row: {
   appleLogin: boolean;
   phoneLogin: boolean;
   emailLogin: boolean;
+  guestLogin?: boolean | null;
   registrationsOpen: boolean;
   postingOpen: boolean;
   burningOpen: boolean;
+  safetyCheckOpen?: boolean | null;
+  moderationKeywords?: unknown;
   noticeOpen?: boolean | null;
   notice: string;
   noticeLinks?: unknown;
@@ -503,9 +543,12 @@ function fromRow(row: {
     appleLogin: row.appleLogin,
     phoneLogin: row.phoneLogin,
     emailLogin: row.emailLogin,
+    guestLogin: row.guestLogin !== false,
     registrationsOpen: row.registrationsOpen,
     postingOpen: row.postingOpen,
     burningOpen: row.burningOpen,
+    safetyCheckOpen: Boolean(row.safetyCheckOpen),
+    moderationKeywords: parseModerationKeywords(row.moderationKeywords),
     noticeOpen: row.noticeOpen !== false,
     notice: row.notice,
     noticeLinks: parseNoticeLinks(row.noticeLinks),
