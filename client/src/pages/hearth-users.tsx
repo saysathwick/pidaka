@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,116 @@ import { clearHearthUsersToken, hearthUsersRequest } from "@/lib/hearth-users";
 import { isHearthApp } from "@/lib/app-mode";
 import type { AdminUser } from "@shared/wall";
 
+type DoorKey = "google" | "apple" | "phone" | "email" | "guest" | "other";
+
+const DOORS: Array<{ key: DoorKey; label: string; match: (provider: string) => boolean }> = [
+  { key: "google", label: "Google", match: (p) => p === "google" },
+  { key: "apple", label: "Apple", match: (p) => p === "apple" },
+  { key: "phone", label: "Phone", match: (p) => p === "phone" },
+  { key: "email", label: "Email", match: (p) => p === "password" || p === "email" },
+  { key: "guest", label: "Guest", match: (p) => p === "guest" },
+  {
+    key: "other",
+    label: "Other",
+    match: (p) => !["google", "apple", "phone", "password", "email", "guest"].includes(p),
+  },
+];
+
+function userHaystack(user: AdminUser) {
+  return [
+    user.anonymousName,
+    user.email,
+    user.authProvider,
+    user.saidOrigin ?? "",
+    user.locationJson ?? "",
+    user.deviceJson ?? "",
+    user.createdAt,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function matchesQuery(user: AdminUser, query: string) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return userHaystack(user).includes(q);
+}
+
+function UserRow({ user }: { user: AdminUser }) {
+  return (
+    <li className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-baseline sm:justify-between">
+      <div className="min-w-0">
+        <p className="font-serif">{user.anonymousName}</p>
+        {user.saidOrigin ? (
+          <p className="mt-1 text-xs text-muted-foreground">Said: {user.saidOrigin}</p>
+        ) : null}
+        {user.locationJson ? (
+          <p className="mt-0.5 break-all text-[10px] text-muted-foreground/80">
+            Place: {user.locationJson}
+          </p>
+        ) : null}
+        {user.deviceJson ? (
+          <p className="mt-0.5 break-all text-[10px] text-muted-foreground/80">
+            Device: {user.deviceJson}
+          </p>
+        ) : null}
+      </div>
+      <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+        {user.authProvider} · {user.email}
+      </p>
+    </li>
+  );
+}
+
+function DoorSection({
+  label,
+  users,
+  query,
+  onQueryChange,
+}: {
+  label: string;
+  users: AdminUser[];
+  query: string;
+  onQueryChange: (value: string) => void;
+}) {
+  const filtered = useMemo(
+    () => users.filter((user) => matchesQuery(user, query)),
+    [users, query],
+  );
+
+  if (users.length === 0) return null;
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="font-serif text-xl">{label}</h3>
+          <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+            {filtered.length}
+            {query.trim() ? ` of ${users.length}` : ""} named
+          </p>
+        </div>
+        <Input
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder={`Search ${label.toLowerCase()}…`}
+          className="sm:max-w-xs"
+          aria-label={`Search ${label}`}
+        />
+      </div>
+      {filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No names match this search.</p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-border/70 rounded-xl border border-border bg-card/60">
+          {filtered.map((user) => (
+            <UserRow key={user.id} user={user} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export default function HearthUsersPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -30,6 +140,15 @@ export default function HearthUsersPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [globalQuery, setGlobalQuery] = useState("");
+  const [doorQueries, setDoorQueries] = useState<Record<DoorKey, string>>({
+    google: "",
+    apple: "",
+    phone: "",
+    email: "",
+    guest: "",
+    other: "",
+  });
 
   const load = async () => {
     setLoading(true);
@@ -89,6 +208,8 @@ export default function HearthUsersPage() {
     }
     setOpen(false);
     setUsers([]);
+    setGlobalQuery("");
+    setDoorQueries({ google: "", apple: "", phone: "", email: "", guest: "", other: "" });
     setLeaving(false);
     setLeaveOpen(false);
   };
@@ -100,6 +221,28 @@ export default function HearthUsersPage() {
     }
     navigate("/hearth");
   };
+
+  const globallyFiltered = useMemo(
+    () => users.filter((user) => matchesQuery(user, globalQuery)),
+    [users, globalQuery],
+  );
+
+  const grouped = useMemo(() => {
+    const bags: Record<DoorKey, AdminUser[]> = {
+      google: [],
+      apple: [],
+      phone: [],
+      email: [],
+      guest: [],
+      other: [],
+    };
+    for (const user of globallyFiltered) {
+      const provider = (user.authProvider || "").toLowerCase();
+      const door = DOORS.find((d) => d.match(provider)) ?? DOORS[DOORS.length - 1];
+      bags[door.key].push(user);
+    }
+    return bags;
+  }, [globallyFiltered]);
 
   return (
     <div className="min-h-screen bg-background wall-atmosphere">
@@ -195,43 +338,47 @@ export default function HearthUsersPage() {
         )}
 
         {open && (
-          <section className="flex flex-col gap-4">
-            <div>
-              <h2 className="font-serif text-2xl">Names</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {users.length} on the wall. Email, place, and device stay here.
-              </p>
-            </div>
+          <div className="flex flex-col gap-10">
+            <section className="flex flex-col gap-4">
+              <div>
+                <h2 className="font-serif text-2xl">Names</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {users.length} on the wall
+                  {globalQuery.trim() ? ` · ${globallyFiltered.length} match` : ""}. Split by door.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="names-global-search" className="text-xs uppercase tracking-wider">
+                  Search all
+                </Label>
+                <Input
+                  id="names-global-search"
+                  value={globalQuery}
+                  onChange={(e) => setGlobalQuery(e.target.value)}
+                  placeholder="Name, email, place, provider…"
+                  data-testid="input-names-global-search"
+                />
+              </div>
+            </section>
+
             {users.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nobody has been named yet.</p>
+            ) : globallyFiltered.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No names match that search.</p>
             ) : (
-              <ul className="flex flex-col divide-y divide-border/70 rounded-xl border border-border bg-card/60">
-                {users.map((user) => (
-                  <li key={user.id} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-baseline sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="font-serif">{user.anonymousName}</p>
-                      {user.saidOrigin ? (
-                        <p className="mt-1 text-xs text-muted-foreground">Said: {user.saidOrigin}</p>
-                      ) : null}
-                      {user.locationJson ? (
-                        <p className="mt-0.5 break-all text-[10px] text-muted-foreground/80">
-                          Place: {user.locationJson}
-                        </p>
-                      ) : null}
-                      {user.deviceJson ? (
-                        <p className="mt-0.5 break-all text-[10px] text-muted-foreground/80">
-                          Device: {user.deviceJson}
-                        </p>
-                      ) : null}
-                    </div>
-                    <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                      {user.authProvider} · {user.email}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              DOORS.map((door) => (
+                <DoorSection
+                  key={door.key}
+                  label={door.label}
+                  users={grouped[door.key]}
+                  query={doorQueries[door.key]}
+                  onQueryChange={(value) =>
+                    setDoorQueries((prev) => ({ ...prev, [door.key]: value }))
+                  }
+                />
+              ))
             )}
-          </section>
+          </div>
         )}
       </main>
     </div>
