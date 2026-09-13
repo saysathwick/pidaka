@@ -20,6 +20,9 @@ const statements = [
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_enc text`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider text NOT NULL DEFAULT 'password'`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_subject text NOT NULL DEFAULT ''`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS said_origin text NOT NULL DEFAULT ''`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS location_json text NOT NULL DEFAULT ''`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS device_json text NOT NULL DEFAULT ''`,
   `CREATE UNIQUE INDEX IF NOT EXISTS users_phone_unique ON users (phone)`,
   `CREATE TABLE IF NOT EXISTS pidakas (
     id varchar PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -112,6 +112,9 @@ export class DemoStorage implements IStorage {
       authProvider: insertUser.authProvider ?? "password",
       authSubject: insertUser.authSubject ?? "",
       anonymousName: insertUser.anonymousName,
+      saidOrigin: insertUser.saidOrigin ?? "",
+      locationJson: insertUser.locationJson ?? "",
+      deviceJson: insertUser.deviceJson ?? "",
       burnsSentCount: 0,
       burnsReceivedCount: 0,
       createdAt: new Date(),
@@ -137,6 +140,17 @@ export class DemoStorage implements IStorage {
     user.burnsReceivedCount = 1;
 
     return revealUser(user);
+  }
+
+  async updateGuestProvenance(
+    userId: string,
+    data: { saidOrigin: string; locationJson: string; deviceJson: string },
+  ) {
+    const user = this.users.get(userId);
+    if (!user) return;
+    user.saidOrigin = data.saidOrigin;
+    user.locationJson = data.locationJson;
+    user.deviceJson = data.deviceJson;
   }
 
   async getUserStats(id: string) {
@@ -384,6 +398,9 @@ export class DemoStorage implements IStorage {
           email: revealed.email,
           anonymousName: revealed.anonymousName,
           authProvider: revealed.authProvider,
+          saidOrigin: revealed.saidOrigin || "",
+          locationJson: revealed.locationJson || "",
+          deviceJson: revealed.deviceJson || "",
           createdAt: revealed.createdAt,
         };
       });

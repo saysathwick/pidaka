@@ -14,7 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CowDungCake } from "@/components/burning-cookie-icon";
+import { PidakaMark } from "@/components/pidaka-logo";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { apiUrl, isNativeApp } from "@/lib/api-base";
@@ -324,7 +324,7 @@ export default function HearthPage() {
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10">
         {!open && !loading && (
           <form onSubmit={enter} className="mx-auto flex w-full max-w-sm flex-col items-center gap-5">
-            <CowDungCake variant="hero" isLit className="h-20 w-20" />
+            <PidakaMark isLit className="h-20 w-auto" />
             <div className="text-center">
               <h1 className="font-serif text-3xl">The hearth</h1>
               <p className="mt-2 text-sm text-muted-foreground">
@@ -717,7 +717,17 @@ export default function HearthPage() {
                 <ul className="flex flex-col divide-y divide-border/70 rounded-xl border border-border bg-card/60">
                   {users.map((user) => (
                     <li key={user.id} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-baseline sm:justify-between">
-                      <p className="font-serif">{user.anonymousName}</p>
+                      <div className="min-w-0">
+                        <p className="font-serif">{user.anonymousName}</p>
+                        {user.saidOrigin ? (
+                          <p className="mt-1 text-xs text-muted-foreground">Said: {user.saidOrigin}</p>
+                        ) : null}
+                        {user.locationJson ? (
+                          <p className="mt-0.5 break-all text-[10px] text-muted-foreground/80">
+                            Place: {user.locationJson}
+                          </p>
+                        ) : null}
+                      </div>
                       <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                         {user.authProvider} · {user.email}
                       </p>

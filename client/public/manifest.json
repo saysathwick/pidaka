@@ -1,7 +1,7 @@
 {
   "name": "Pidaka",
   "short_name": "Pidaka",
-  "description": "Anonymous opinions from strangers. No identity. No followers. Just truth.",
+  "description": "Speak freely. Anonymously.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -103,6 +103,9 @@ export type AdminUser = {
   email: string;
   anonymousName: string;
   authProvider: string;
+  saidOrigin?: string;
+  locationJson?: string;
+  deviceJson?: string;
   createdAt: string;
 };
 

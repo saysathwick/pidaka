@@ -17,11 +17,12 @@ import {
 } from "@/components/ui/dialog";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
-import { CowDungCake } from "@/components/burning-cookie-icon";
+import { PidakaBrandLockup } from "@/components/pidaka-logo";
 import { ArrowLeft, Mail } from "lucide-react";
 import { Link } from "wouter";
 import { usePublicWall } from "@/lib/wall";
 import { isPlausibleEmail } from "@shared/schema";
+import { guestKey, readDeviceDetails, requestGuestLocation } from "@/lib/guest-auth";
 
 function formMessage(err: unknown, fallback: string) {
   const raw = err instanceof Error ? err.message : fallback;
@@ -57,13 +58,14 @@ function AppleMark() {
 }
 
 export function AuthForm() {
-  const [step, setStep] = useState<"choose" | "phone" | "code" | "email">("choose");
+  const [step, setStep] = useState<"choose" | "phone" | "code" | "email" | "guest-origin" | "guest-place">("choose");
   const [emailMode, setEmailMode] = useState<"register" | "login">("register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const [loading, setLoading] = useState<"google" | "apple" | "phone" | "email" | null>(null);
+  const [saidOrigin, setSaidOrigin] = useState("");
+  const [loading, setLoading] = useState<"google" | "apple" | "phone" | "email" | "guest" | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const { completeSession, authError, clearAuthError } = useAuth();
   const { toast } = useToast();
@@ -157,10 +159,56 @@ export function AuthForm() {
     }
   };
 
+  const browseAsGuest = () => {
+    setFormError(null);
+    hideAuth();
+  };
+
+  const startGuestNaming = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    const origin = saidOrigin.trim();
+    if (origin.length < 2) {
+      const message = "Tell us where you are from";
+      setFormError(message);
+      toast({ title: "One more thing", description: message, variant: "destructive" });
+      return;
+    }
+    setStep("guest-place");
+    setLoading("guest");
+    try {
+      const location = await requestGuestLocation();
+      if (!location) {
+        toast({
+          title: "Location stayed off",
+          description: "You can still read the wall. Pasting and burns need a named door, or share location to take a guest name.",
+        });
+        browseAsGuest();
+        return;
+      }
+      const res = await apiRequest("POST", "/api/auth/guest", {
+        guestKey: guestKey(),
+        saidOrigin: origin,
+        location,
+        device: readDeviceDetails(),
+      });
+      const data = await res.json();
+      completeSession(data);
+      afterSession();
+    } catch (err: unknown) {
+      const message = formMessage(err, "Could not take that guest name");
+      setFormError(message);
+      toast({ title: "Could not take that guest name", description: message, variant: "destructive" });
+      setStep("guest-origin");
+    } finally {
+      setLoading(null);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col items-center gap-3">
-        <CowDungCake variant="hero" isLit={false} className="h-24 w-24" />
+        <PidakaBrandLockup markLit={false} />
         <p className="text-sm text-foreground/70 text-center leading-relaxed max-w-[260px]">
           We will name you. You will not pick it.
         </p>
@@ -253,6 +301,98 @@ export function AuthForm() {
               Continue with email
             </Button>
           )}
+          <div className="relative my-1 flex items-center gap-3">
+            <span className="h-px flex-1 bg-border/70" />
+            <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">or</span>
+            <span className="h-px flex-1 bg-border/70" />
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-11 text-muted-foreground hover:text-foreground"
+            disabled={loading !== null}
+            onClick={() => {
+              setFormError(null);
+              if (wall?.registrations === false) {
+                browseAsGuest();
+                toast({
+                  title: "Guest names are closed",
+                  description: "You can still read the wall tonight.",
+                });
+                return;
+              }
+              setSaidOrigin("");
+              setStep("guest-origin");
+            }}
+            data-testid="button-auth-guest"
+          >
+            Continue as guest
+          </Button>
+          <p className="text-center text-[11px] leading-relaxed text-muted-foreground -mt-1">
+            Read free, or share where you are from and location to take a name.
+          </p>
+        </div>
+      )}
+
+      {step === "guest-origin" && (
+        <form onSubmit={startGuestNaming} className="flex flex-col gap-4">
+          <button
+            type="button"
+            className="self-start inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
+            onClick={() => setStep("choose")}
+          >
+            <ArrowLeft className="h-3 w-3" />
+            Other ways
+          </button>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="guest-origin" className="text-xs uppercase tracking-wider">
+              Where are you from?
+            </Label>
+            <Input
+              id="guest-origin"
+              value={saidOrigin}
+              onChange={(e) => setSaidOrigin(e.target.value)}
+              maxLength={120}
+              placeholder="City, region, or country"
+              autoComplete="address-level2"
+              required
+              data-testid="input-guest-origin"
+            />
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Next we ask for location on this device. If you allow it, Pidaka names you so you can paste and burn. If you refuse, you stay a reader.
+            </p>
+          </div>
+          <Button type="submit" className="h-11" disabled={loading === "guest"} data-testid="button-guest-origin-continue">
+            {loading === "guest" ? "Waiting..." : "Continue"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-10 text-muted-foreground"
+            disabled={loading === "guest"}
+            onClick={browseAsGuest}
+            data-testid="button-guest-read-only"
+          >
+            Just read the wall
+          </Button>
+        </form>
+      )}
+
+      {step === "guest-place" && (
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-center text-muted-foreground leading-relaxed">
+            Waiting on location permission…
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-10 text-muted-foreground"
+            disabled={loading === "guest"}
+            onClick={browseAsGuest}
+            data-testid="button-guest-place-skip"
+          >
+            Just read the wall
+          </Button>
         </div>
       )}
 
@@ -437,7 +577,7 @@ export function AuthDialog() {
             Pidaka
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Continue with Google, Apple, phone, or email
+            Continue with Google, Apple, phone, email, or as a guest with location
           </DialogDescription>
         </DialogHeader>
         <AuthForm />

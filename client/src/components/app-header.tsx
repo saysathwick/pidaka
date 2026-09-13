@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { BurningCookieIcon } from "@/components/burning-cookie-icon";
+import { PidakaMark } from "@/components/pidaka-logo";
 import { cn } from "@/lib/utils";
 
 function IconAction({
@@ -100,13 +100,14 @@ export function AppHeader({
             onClick={() => navigate("/")}
             data-testid="text-brand"
           >
-          <BurningCookieIcon className="h-7 w-7 shrink-0" isLit={place === "burns" || Boolean(user)} />
+          <PidakaMark className="h-8 w-8 shrink-0" isLit={place === "burns" || Boolean(user)} />
           <span className="flex min-w-0 flex-col justify-center">
-            <span className="font-serif text-xl leading-none tracking-[0.18em] uppercase">Pidaka</span>
+            <span className="font-serif text-xl leading-none tracking-[0.22em] uppercase text-[#3d2a1a] dark:text-[#d4c4a8]">
+              Pidaka
+            </span>
             {place === "wall" && (
-              <span className="mt-1 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary ember-breathe" />
-                Listening
+              <span className="mt-1 font-serif text-[10px] tracking-wide text-[#6b5340] dark:text-[#a89078]">
+                pidaka.in
               </span>
             )}
             {place === "burns" && (

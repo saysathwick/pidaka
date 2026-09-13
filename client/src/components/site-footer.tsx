@@ -15,7 +15,8 @@ export function SiteFooter({ padded = false }: { padded?: boolean }) {
     >
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1">
-          <p className="font-serif text-sm tracking-[0.18em] uppercase">{SITE_NAME}</p>
+          <p className="font-serif text-sm tracking-[0.22em] uppercase text-[#3d2a1a] dark:text-[#d4c4a8]">{SITE_NAME}</p>
+          <p className="font-serif text-xs tracking-wide text-[#6b5340] dark:text-[#a89078]">pidaka.in</p>
           <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
             A product of {OPERATOR.legalName}. India
           </p>

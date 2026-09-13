@@ -27,6 +27,10 @@ export interface IStorage {
   getUserByAuth(provider: string, subject: string): Promise<User | undefined>;
   getUserByAnonymousName(name: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateGuestProvenance(
+    userId: string,
+    data: { saidOrigin: string; locationJson: string; deviceJson: string },
+  ): Promise<void>;
   getUserStats(id: string): Promise<{ burnsSentCount: number; burnsReceivedCount: number }>;
 
   getActivePidakas(): Promise<Pidaka[]>;
@@ -70,6 +74,9 @@ export interface IStorage {
     email: string;
     anonymousName: string;
     authProvider: string;
+    saidOrigin?: string;
+    locationJson?: string;
+    deviceJson?: string;
     createdAt: Date;
   }>>;
 }
@@ -109,6 +116,20 @@ export class DatabaseStorage implements IStorage {
     const vaulted = vaultUserInsert({ email: insertUser.email, phone: insertUser.phone });
     const [user] = await db.insert(users).values({ ...insertUser, ...vaulted }).returning();
     return revealUser(user);
+  }
+
+  async updateGuestProvenance(
+    userId: string,
+    data: { saidOrigin: string; locationJson: string; deviceJson: string },
+  ) {
+    await db
+      .update(users)
+      .set({
+        saidOrigin: data.saidOrigin,
+        locationJson: data.locationJson,
+        deviceJson: data.deviceJson,
+      })
+      .where(eq(users.id, userId));
   }
 
   async getUserByAnonymousName(name: string): Promise<User | undefined> {
@@ -427,6 +448,9 @@ export class DatabaseStorage implements IStorage {
         email: revealed.email,
         anonymousName: revealed.anonymousName,
         authProvider: revealed.authProvider,
+        saidOrigin: revealed.saidOrigin || "",
+        locationJson: revealed.locationJson || "",
+        deviceJson: revealed.deviceJson || "",
         createdAt: revealed.createdAt,
       };
     });

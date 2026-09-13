@@ -17,7 +17,7 @@ import HearthPage from "@/pages/hearth";
 import { usePageMeta } from "@/lib/page-meta";
 import { CinematicIntro, shouldPlayIntro } from "@/components/cinematic-intro";
 import { NameReveal } from "@/components/name-reveal";
-import { BurningCookieIcon } from "@/components/burning-cookie-icon";
+import { PidakaMark } from "@/components/pidaka-logo";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAndroidBackButton, initNativeChrome } from "@/lib/capacitor";
 
@@ -61,7 +61,7 @@ function AppContent() {
       <div className="min-h-screen flex items-center justify-center bg-background wall-atmosphere">
         <div className="relative">
           <div className="absolute -inset-6 rounded-full bg-primary/20 blur-2xl ember-breathe" />
-          <BurningCookieIcon variant="hero" isLit className="h-20 w-20 relative" />
+          <PidakaMark className="h-20 w-auto relative" isLit />
         </div>
       </div>
     );

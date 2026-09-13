@@ -13,6 +13,9 @@ export const users = pgTable("users", {
   authProvider: text("auth_provider").notNull().default("password"),
   authSubject: text("auth_subject").notNull().default(""),
   anonymousName: text("anonymous_name").notNull().unique(),
+  saidOrigin: text("said_origin").notNull().default(""),
+  locationJson: text("location_json").notNull().default(""),
+  deviceJson: text("device_json").notNull().default(""),
   burnsSentCount: integer("burns_sent_count").notNull().default(0),
   burnsReceivedCount: integer("burns_received_count").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -131,6 +134,23 @@ export const phoneStartSchema = z.object({
 export const phoneVerifySchema = z.object({
   phone: z.string().min(8, "Enter a phone number"),
   code: z.string().regex(/^\d{6}$/, "Enter the six-digit code"),
+});
+
+export const guestAuthSchema = z.object({
+  guestKey: z.string().min(16).max(128),
+  saidOrigin: z.string().trim().min(2, "Tell us where you are from").max(120),
+  location: z.object({
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    accuracy: z.number().min(0).max(100_000).optional(),
+  }),
+  device: z.object({
+    platform: z.string().max(40).optional(),
+    language: z.string().max(40).optional(),
+    timezone: z.string().max(80).optional(),
+    userAgent: z.string().max(512).optional(),
+    screen: z.string().max(40).optional(),
+  }).optional(),
 });
 
 export const insertPidakaSchema = z.object({

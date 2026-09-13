@@ -1,5 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import { createHash } from "node:crypto";
 import { queueForViewer } from "doorstep";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
@@ -16,6 +17,7 @@ import {
   devicePushUnregisterSchema,
   phoneStartSchema,
   phoneVerifySchema,
+  guestAuthSchema,
   adminSessionSchema,
   wallSettingsPatchSchema,
 } from "@shared/schema";
@@ -363,6 +365,75 @@ export async function registerRoutes(
       });
     } catch (err: any) {
       return serverError(res, "Login failed", err);
+    }
+  });
+
+  app.post("/api/auth/guest", limitAuth, async (req: Request, res: Response) => {
+    try {
+      const wall = await readPublicWall();
+      if (!wall.registrations) {
+        return res.status(403).json({ message: "The wall is not taking names tonight" });
+      }
+
+      const parsed = guestAuthSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0].message });
+      }
+
+      const saidOrigin = parsed.data.saidOrigin.trim().replace(/\s+/g, " ");
+      const locationJson = JSON.stringify({
+        lat: parsed.data.location.lat,
+        lng: parsed.data.location.lng,
+        accuracy: parsed.data.location.accuracy ?? null,
+        at: new Date().toISOString(),
+      });
+      const deviceJson = JSON.stringify({
+        platform: parsed.data.device?.platform?.slice(0, 40) || "",
+        language: parsed.data.device?.language?.slice(0, 40) || "",
+        timezone: parsed.data.device?.timezone?.slice(0, 80) || "",
+        userAgent: parsed.data.device?.userAgent?.slice(0, 512) || "",
+        screen: parsed.data.device?.screen?.slice(0, 40) || "",
+      });
+
+      const existing = await storage.getUserByAuth("guest", parsed.data.guestKey);
+      if (existing) {
+        await storage.updateGuestProvenance(existing.id, { saidOrigin, locationJson, deviceJson });
+        const token = issueSession(res, existing.id);
+        return res.json({
+          token,
+          created: false,
+          user: await publicUser(existing.id, {
+            anonymousName: existing.anonymousName,
+            burnsSentCount: existing.burnsSentCount,
+            burnsReceivedCount: existing.burnsReceivedCount,
+          }),
+        });
+      }
+
+      const stamp = createHash("sha256").update(`guest:${parsed.data.guestKey}`).digest("hex").slice(0, 20);
+      const user = await storage.createUser({
+        email: `guest.${stamp}@users.pidaka`,
+        password: "",
+        authProvider: "guest",
+        authSubject: parsed.data.guestKey,
+        anonymousName: await uniqueAnonymousName(),
+        saidOrigin,
+        locationJson,
+        deviceJson,
+      });
+
+      const token = issueSession(res, user.id);
+      return res.status(201).json({
+        token,
+        created: true,
+        user: await publicUser(user.id, {
+          anonymousName: user.anonymousName,
+          burnsSentCount: user.burnsSentCount,
+          burnsReceivedCount: user.burnsReceivedCount,
+        }),
+      });
+    } catch (err: any) {
+      return serverError(res, "Guest naming failed", err);
     }
   });
 

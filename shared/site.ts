@@ -1,7 +1,14 @@
 export const SITE_NAME = "Pidaka";
 
-export const SITE_TAGLINE =
-  "Anonymous opinions from strangers. No identity. No followers. Just truth.";
+export const SITE_TAGLINE = "Speak freely. Anonymously.";
+
+export const SITE_TAGLINE_LEAD = "Speak freely.";
+
+export const SITE_TAGLINE_ACCENT = "Anonymously.";
+
+export const SITE_GREETING = "Happy Raksha Bandhan!";
+
+export const SITE_GREETING_SUB = "Cheppandi. Evariki teliyakunda.";
 
 export const OPERATOR = {
   legalName: "Phito Innovative Solutions Private Limited",
@@ -34,7 +41,7 @@ const PAGE_META: Record<AppPath, PageMeta> = {
   },
   "/about": {
     title: "About — Pidaka",
-    description: "No identity. No followers. Just truth. What Pidaka is, and how to reach Phito.",
+    description: "Speak freely. Anonymously. What Pidaka is, and how to reach Phito.",
   },
   "/privacy": {
     title: "Privacy — Pidaka",

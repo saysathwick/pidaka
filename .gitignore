@@ -22,5 +22,10 @@ android-hearth/app/build/
 android-hearth/build/
 android-hearth/captures/
 android-hearth/.idea/
+ios/App/Pods/
+ios/App/build/
+ios/App/App/public/
+ios/App/DerivedData/
+ios/.xcode.env.local
 *.jks
 *.keystore

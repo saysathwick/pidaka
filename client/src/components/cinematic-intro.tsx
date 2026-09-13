@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { PidakaMark } from "@/components/burning-cookie-icon";
+import { PidakaBrandLockup, PidakaMark } from "@/components/pidaka-logo";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 
 const INTRO_KEY = "pidaka_intro_seen";
@@ -83,11 +83,11 @@ export function CinematicIntro({ onComplete }: CinematicIntroProps) {
 
   const line =
     scene === "paste"
-      ? "No identity."
+      ? "Speak freely."
       : scene === "dry"
-        ? "No followers."
+        ? "No name."
         : scene === "burn"
-          ? "Just truth."
+          ? "No trace."
           : null;
 
   const showCake = scene === "paste" || scene === "dry" || scene === "burn" || scene === "mark";
@@ -155,9 +155,7 @@ export function CinematicIntro({ onComplete }: CinematicIntroProps) {
                 transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                 className="flex flex-col items-center"
               >
-                <h1 className="font-serif text-5xl md:text-7xl tracking-[0.22em] font-medium">
-                  PIDAKA
-                </h1>
+                <PidakaBrandLockup useImage={false} onDark markLit className="scale-110 md:scale-125" />
               </motion.div>
             )}
           </AnimatePresence>
