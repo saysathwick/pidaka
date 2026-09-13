@@ -1,3 +1,6 @@
+import { Capacitor } from "@capacitor/core";
+import { Geolocation } from "@capacitor/geolocation";
+
 const GUEST_KEY = "pidaka_guest_key";
 
 function randomGuestKey() {
@@ -34,25 +37,87 @@ export type GuestLocation = {
   accuracy?: number;
 };
 
-export function requestGuestLocation(): Promise<GuestLocation | null> {
-  if (typeof navigator === "undefined" || !navigator.geolocation) {
-    return Promise.resolve(null);
+export type GuestLocationResult =
+  | { ok: true; location: GuestLocation }
+  | { ok: false; reason: "unsupported" | "denied" | "timeout" | "unavailable" };
+
+async function requestNativeLocation(): Promise<GuestLocationResult> {
+  try {
+    const permission = await Geolocation.checkPermissions();
+    let receive = permission.location;
+    let coarse = permission.coarseLocation;
+    if (receive === "prompt" || receive === "prompt-with-rationale" || coarse === "prompt" || coarse === "prompt-with-rationale") {
+      const next = await Geolocation.requestPermissions({ permissions: ["location", "coarseLocation"] });
+      receive = next.location;
+      coarse = next.coarseLocation;
+    }
+    if (receive === "denied" && coarse === "denied") return { ok: false, reason: "denied" };
+    if (receive !== "granted" && coarse !== "granted") return { ok: false, reason: "unavailable" };
+
+    const pos = await Geolocation.getCurrentPosition({
+      enableHighAccuracy: false,
+      timeout: 15_000,
+      maximumAge: 60_000,
+    });
+    return {
+      ok: true,
+      location: {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : undefined,
+      },
+    };
+  } catch (err) {
+    const message = String((err as { message?: string })?.message || err || "").toLowerCase();
+    if (message.includes("denied") || message.includes("permission")) {
+      return { ok: false, reason: "denied" };
+    }
+    if (message.includes("timeout")) return { ok: false, reason: "timeout" };
+    return { ok: false, reason: "unavailable" };
   }
+}
+
+function requestWebLocation(): Promise<GuestLocationResult> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    return Promise.resolve({ ok: false, reason: "unsupported" });
+  }
+
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         resolve({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : undefined,
+          ok: true,
+          location: {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : undefined,
+          },
         });
       },
-      () => resolve(null),
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          resolve({ ok: false, reason: "denied" });
+          return;
+        }
+        if (err.code === err.TIMEOUT) {
+          resolve({ ok: false, reason: "timeout" });
+          return;
+        }
+        resolve({ ok: false, reason: "unavailable" });
+      },
       {
         enableHighAccuracy: false,
         timeout: 15_000,
-        maximumAge: 60_000,
+        maximumAge: 0,
       },
     );
   });
+}
+
+/** Must be called directly from a user gesture (click/submit) so the browser can show the prompt. */
+export function requestGuestLocation(): Promise<GuestLocationResult> {
+  if (Capacitor.isNativePlatform()) {
+    return requestNativeLocation();
+  }
+  return requestWebLocation();
 }

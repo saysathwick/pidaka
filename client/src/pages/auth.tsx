@@ -164,32 +164,29 @@ export function AuthForm() {
     hideAuth();
   };
 
-  const startGuestNaming = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError(null);
-    const origin = saidOrigin.trim();
-    if (origin.length < 2) {
-      const message = "Tell us where you are from";
-      setFormError(message);
-      toast({ title: "One more thing", description: message, variant: "destructive" });
-      return;
-    }
-    setStep("guest-place");
+  const finishGuestWithLocation = async (origin: string, locationPromise: ReturnType<typeof requestGuestLocation>) => {
     setLoading("guest");
+    setStep("guest-place");
     try {
-      const location = await requestGuestLocation();
-      if (!location) {
-        toast({
-          title: "Location stayed off",
-          description: "You can still read the wall. Pasting and burns need a named door, or share location to take a guest name.",
-        });
-        browseAsGuest();
+      const result = await locationPromise;
+      if (!result.ok) {
+        const description =
+          result.reason === "denied"
+            ? "Allow location for this site in your browser or phone settings, then try again."
+            : result.reason === "timeout"
+              ? "Location took too long. Try again near a window, or just read the wall."
+              : result.reason === "unsupported"
+                ? "This device cannot share location. Use another door, or just read the wall."
+                : "Location did not come through. Try again, or just read the wall.";
+        setFormError(description);
+        toast({ title: "Location is needed for a guest name", description, variant: "destructive" });
+        setStep("guest-origin");
         return;
       }
       const res = await apiRequest("POST", "/api/auth/guest", {
         guestKey: guestKey(),
         saidOrigin: origin,
-        location,
+        location: result.location,
         device: readDeviceDetails(),
       });
       const data = await res.json();
@@ -203,6 +200,21 @@ export function AuthForm() {
     } finally {
       setLoading(null);
     }
+  };
+
+  const startGuestNaming = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    const origin = saidOrigin.trim();
+    if (origin.length < 2) {
+      const message = "Tell us where you are from";
+      setFormError(message);
+      toast({ title: "One more thing", description: message, variant: "destructive" });
+      return;
+    }
+    // Start geolocation in the same user gesture so the browser/OS prompt can appear.
+    const locationPromise = requestGuestLocation();
+    await finishGuestWithLocation(origin, locationPromise);
   };
 
   return (
@@ -382,6 +394,9 @@ export function AuthForm() {
         <div className="flex flex-col gap-4">
           <p className="text-sm text-center text-muted-foreground leading-relaxed">
             Waiting on location permission…
+          </p>
+          <p className="text-[11px] text-center text-muted-foreground leading-relaxed">
+            Your browser or phone should ask now. Allow it to take a guest name.
           </p>
           <Button
             type="button"
@@ -573,9 +588,7 @@ export function AuthDialog() {
     <Dialog open={authOpen} onOpenChange={(open) => !open && hideAuth()}>
       <DialogContent className="max-w-sm bg-card text-card-foreground border-border shadow-2xl sm:rounded-xl">
         <DialogHeader className="text-center sm:text-center">
-          <DialogTitle className="font-serif text-2xl tracking-[0.18em] uppercase">
-            Pidaka
-          </DialogTitle>
+          <DialogTitle className="sr-only">Pidaka</DialogTitle>
           <DialogDescription className="sr-only">
             Continue with Google, Apple, phone, email, or as a guest with location
           </DialogDescription>
