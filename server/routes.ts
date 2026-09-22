@@ -453,12 +453,17 @@ export async function registerRoutes(
       }
 
       const saidOrigin = parsed.data.saidOrigin.trim().replace(/\s+/g, " ");
-      const locationJson = JSON.stringify({
-        lat: parsed.data.location.lat,
-        lng: parsed.data.location.lng,
-        accuracy: parsed.data.location.accuracy ?? null,
-        at: new Date().toISOString(),
-      });
+      const locationJson = parsed.data.location
+        ? JSON.stringify({
+            lat: parsed.data.location.lat,
+            lng: parsed.data.location.lng,
+            accuracy: parsed.data.location.accuracy ?? null,
+            at: new Date().toISOString(),
+          })
+        : JSON.stringify({
+            timedOut: Boolean(parsed.data.locationTimedOut),
+            at: new Date().toISOString(),
+          });
       const deviceJson = JSON.stringify({
         platform: parsed.data.device?.platform?.slice(0, 40) || "",
         language: parsed.data.device?.language?.slice(0, 40) || "",
@@ -466,6 +471,10 @@ export async function registerRoutes(
         userAgent: parsed.data.device?.userAgent?.slice(0, 512) || "",
         screen: parsed.data.device?.screen?.slice(0, 40) || "",
       });
+
+      if (!parsed.data.location && !parsed.data.locationTimedOut) {
+        return res.status(400).json({ message: "Location is needed for a guest name" });
+      }
 
       const existing = await storage.getUserByAuth("guest", parsed.data.guestKey);
       if (existing) {

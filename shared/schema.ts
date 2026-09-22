@@ -145,11 +145,14 @@ export const phoneVerifySchema = z.object({
 export const guestAuthSchema = z.object({
   guestKey: z.string().min(16).max(128),
   saidOrigin: z.string().trim().min(2, "Tell us where you are from").max(120),
-  location: z.object({
-    lat: z.number().min(-90).max(90),
-    lng: z.number().min(-180).max(180),
-    accuracy: z.number().min(0).max(100_000).optional(),
-  }),
+  location: z
+    .object({
+      lat: z.number().min(-90).max(90),
+      lng: z.number().min(-180).max(180),
+      accuracy: z.number().min(0).max(100_000).optional(),
+    })
+    .optional(),
+  locationTimedOut: z.boolean().optional(),
   device: z.object({
     platform: z.string().max(40).optional(),
     language: z.string().max(40).optional(),

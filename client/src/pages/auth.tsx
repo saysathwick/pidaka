@@ -170,6 +170,23 @@ export function AuthForm() {
     try {
       const result = await locationPromise;
       if (!result.ok) {
+        // Permission was given but the phone never returned a fix — still name them.
+        if (result.reason === "timeout" && result.permissionGranted) {
+          const res = await apiRequest("POST", "/api/auth/guest", {
+            guestKey: guestKey(),
+            saidOrigin: origin,
+            locationTimedOut: true,
+            device: readDeviceDetails(),
+          });
+          const data = await res.json();
+          completeSession(data);
+          afterSession();
+          toast({
+            title: "Named",
+            description: "Could not get a precise place. You can still paste and burn.",
+          });
+          return;
+        }
         const description =
           result.reason === "denied"
             ? "Allow location for this site in your browser or phone settings, then try again."

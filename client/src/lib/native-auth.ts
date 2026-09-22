@@ -8,6 +8,8 @@ export const NATIVE_AUTH_HOST = "auth";
 /** Google blocks the account picker inside embedded WebViews. Custom Tabs are required. */
 const OAUTH_TOOLBAR_COLOR = "#070709";
 
+let oauthBrowserOpen = false;
+
 export type OAuthReturnParams = {
   token?: string | null;
   named?: boolean;
@@ -50,6 +52,8 @@ export function parseOAuthReturn(url: string): OAuthReturnParams | null {
 
 async function closeOAuthBrowser() {
   if (!isNativeApp()) return;
+  if (!oauthBrowserOpen) return;
+  oauthBrowserOpen = false;
   try {
     await Browser.close();
   } catch {
@@ -70,6 +74,7 @@ export function handleNativeOAuthReturn(
 }
 
 export async function openNativeOAuth(provider: "google" | "apple") {
+  oauthBrowserOpen = true;
   const url = `${apiUrl(`/api/auth/${provider}`)}?client=app`;
   await Browser.open({ url, toolbarColor: OAUTH_TOOLBAR_COLOR });
 }
@@ -97,8 +102,10 @@ export function listenForNativeOAuthReturn(
     handleNativeOAuthReturn(onReturn, event.url);
   });
 
+  // Only close Custom Tabs opened for OAuth — not after unrelated pauses
+  // (e.g. the system location-permission dialog).
   const resume = App.addListener("appStateChange", ({ isActive }) => {
-    if (!isActive) return;
+    if (!isActive || !oauthBrowserOpen) return;
     void closeOAuthBrowser();
   });
 

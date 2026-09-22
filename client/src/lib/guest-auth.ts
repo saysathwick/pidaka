@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import { Geolocation } from "@capacitor/geolocation";
+import { Geolocation, type Position } from "@capacitor/geolocation";
 
 const GUEST_KEY = "pidaka_guest_key";
 
@@ -39,13 +39,13 @@ export type GuestLocation = {
 
 export type GuestLocationResult =
   | { ok: true; location: GuestLocation }
-  | { ok: false; reason: "unsupported" | "denied" | "timeout" | "unavailable" };
+  | { ok: false; reason: "unsupported" | "denied" | "timeout" | "unavailable"; permissionGranted?: boolean };
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-function toGuestLocation(pos: { coords: { latitude: number; longitude: number; accuracy: number } }): GuestLocation {
+function toGuestLocation(pos: Position): GuestLocation {
   return {
     lat: pos.coords.latitude,
     lng: pos.coords.longitude,
@@ -59,14 +59,43 @@ function isTimeoutError(err: unknown) {
   return message.includes("timeout") || message.includes("in time") || code.includes("gloc-0010");
 }
 
-async function readNativePosition() {
+async function watchNativePosition(ms: number, enableHighAccuracy: boolean): Promise<Position> {
+  return new Promise(async (resolve, reject) => {
+    let settled = false;
+    let watchId = "";
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      if (watchId) void Geolocation.clearWatch({ id: watchId });
+      reject(new Error("Location request timed out"));
+    }, ms);
+
+    try {
+      watchId = await Geolocation.watchPosition(
+        { enableHighAccuracy, timeout: ms, maximumAge: 5 * 60_000 },
+        (pos, err) => {
+          if (settled) return;
+          if (err || !pos) return;
+          settled = true;
+          window.clearTimeout(timer);
+          void Geolocation.clearWatch({ id: watchId });
+          resolve(pos);
+        },
+      );
+    } catch (err) {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      reject(err);
+    }
+  });
+}
+
+async function readNativePosition(): Promise<Position> {
   const attempts: Array<{ enableHighAccuracy: boolean; timeout: number; maximumAge: number }> = [
-    // Prefer a recent cached fix right after the permission dialog.
-    { enableHighAccuracy: false, timeout: 12_000, maximumAge: 5 * 60_000 },
-    // Then ask the network / fused provider again.
-    { enableHighAccuracy: false, timeout: 25_000, maximumAge: 0 },
-    // Last try: GPS (slower indoors, but sometimes the only path).
-    { enableHighAccuracy: true, timeout: 30_000, maximumAge: 0 },
+    { enableHighAccuracy: false, timeout: 20_000, maximumAge: 10 * 60_000 },
+    { enableHighAccuracy: false, timeout: 30_000, maximumAge: 0 },
+    { enableHighAccuracy: true, timeout: 35_000, maximumAge: 0 },
   ];
 
   let lastErr: unknown;
@@ -78,10 +107,18 @@ async function readNativePosition() {
       if (!isTimeoutError(err)) throw err;
     }
   }
+
+  try {
+    return await watchNativePosition(25_000, false);
+  } catch (err) {
+    lastErr = err;
+  }
+
   throw lastErr;
 }
 
 async function requestNativeLocation(): Promise<GuestLocationResult> {
+  let permissionGranted = false;
   try {
     const permission = await Geolocation.checkPermissions();
     let receive = permission.location;
@@ -90,21 +127,22 @@ async function requestNativeLocation(): Promise<GuestLocationResult> {
       const next = await Geolocation.requestPermissions({ permissions: ["location", "coarseLocation"] });
       receive = next.location;
       coarse = next.coarseLocation;
-      // Android often needs a beat after the dialog before a fix is available.
-      await sleep(400);
+      // Android often needs a beat after the dialog before providers are ready.
+      await sleep(800);
     }
+    permissionGranted = receive === "granted" || coarse === "granted";
     if (receive === "denied" && coarse === "denied") return { ok: false, reason: "denied" };
-    if (receive !== "granted" && coarse !== "granted") return { ok: false, reason: "unavailable" };
+    if (!permissionGranted) return { ok: false, reason: "unavailable" };
 
     const pos = await readNativePosition();
     return { ok: true, location: toGuestLocation(pos) };
   } catch (err) {
     const message = String((err as { message?: string })?.message || err || "").toLowerCase();
     if (message.includes("denied") || message.includes("permission")) {
-      return { ok: false, reason: "denied" };
+      return { ok: false, reason: "denied", permissionGranted };
     }
-    if (isTimeoutError(err)) return { ok: false, reason: "timeout" };
-    return { ok: false, reason: "unavailable" };
+    if (isTimeoutError(err)) return { ok: false, reason: "timeout", permissionGranted };
+    return { ok: false, reason: "unavailable", permissionGranted };
   }
 }
 
@@ -116,7 +154,7 @@ function requestWebLocation(): Promise<GuestLocationResult> {
   const tryOnce = (options: PositionOptions) =>
     new Promise<GuestLocationResult>((resolve) => {
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ ok: true, location: toGuestLocation(pos) }),
+        (pos) => resolve({ ok: true, location: toGuestLocation(pos as unknown as Position) }),
         (err) => {
           if (err.code === err.PERMISSION_DENIED) {
             resolve({ ok: false, reason: "denied" });
