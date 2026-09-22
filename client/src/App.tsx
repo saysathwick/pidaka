@@ -74,7 +74,7 @@ function AppContent() {
       <AnimatePresence mode="wait">
         <motion.div
           key={
-            location === "/privacy" || location === "/terms" || location === "/contact" || location === "/about"
+            location === "/privacy" || location === "/terms" || location === "/contact" || location === "/about" || location === "/delete-account"
               ? "/about"
               : location
           }
@@ -94,6 +94,7 @@ function AppContent() {
             <Route path="/privacy" component={AboutPage} />
             <Route path="/terms" component={AboutPage} />
             <Route path="/contact" component={AboutPage} />
+            <Route path="/delete-account" component={AboutPage} />
             <Route path="/hearth/users" component={HearthUsersPage} />
             <Route path="/hearth" component={HearthPage} />
             <Route component={NotFound} />

@@ -131,8 +131,12 @@ export function PrivacyCopy() {
         <p>
           You can leave the wall from the header. That also drops burn alerts for
           this device. You can refuse notifications in the browser. Write to{" "}
-          {OPERATOR.email} to delete your account and the pidakas still tied to it.
-          We will say when it is done. Some records may remain for a short time in
+          {OPERATOR.email} to delete your account and the pidakas still tied to it,
+          or use{" "}
+          <Link href="/delete-account" className="underline underline-offset-4">
+            Delete account
+          </Link>
+          . We will say when it is done. Some records may remain for a short time in
           backups or where the law requires it.
         </p>
       </LegalSection>
@@ -252,8 +256,11 @@ export function ContactCopy() {
           </a>
         </p>
         <p className="text-sm text-muted-foreground">
-          Use this for account deletion, a report, or a legal notice. We aim to
-          reply within fifteen days.
+          Use this for a report or a legal notice. To delete your account, use{" "}
+          <Link href="/delete-account" className="underline underline-offset-4">
+            Delete account
+          </Link>
+          . We aim to reply within fifteen days.
         </p>
       </LegalSection>
 
@@ -282,6 +289,45 @@ export function ContactCopy() {
             phito.in
           </a>
           .
+        </p>
+      </LegalSection>
+    </>
+  );
+}
+
+export function DeleteAccountCopy() {
+  const mail = `mailto:${OPERATOR.email}?subject=${encodeURIComponent("Pidaka account deletion request")}`;
+  return (
+    <>
+      <LegalSection title="How to request deletion">
+        <p>
+          To delete your Pidaka account and the data tied to it, email us from the
+          address or phone you used to sign in (or include your anonymous name if
+          you only used guest).
+        </p>
+        <p>
+          <a className="underline underline-offset-4" href={mail}>
+            {OPERATOR.email}
+          </a>
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Subject line: “Pidaka account deletion request”. We aim to complete
+          deletion within fifteen days and will confirm when it is done.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="What we remove">
+        <p>
+          Your account, anonymous name, sign-in details, guest provenance we
+          stored, push tokens for your devices, and pidakas still tied to your
+          account. Burns attached to those pidakas go with them.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="What may remain briefly">
+        <p>
+          Some records may remain for a short time in backups, or where the law
+          requires us to keep them. They are not used to put you back on the wall.
         </p>
       </LegalSection>
     </>

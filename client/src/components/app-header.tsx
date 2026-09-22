@@ -70,7 +70,11 @@ export function AppHeader({
   const [leaving, setLeaving] = useState(false);
 
   const aboutOpen =
-    location === "/about" || location === "/privacy" || location === "/terms" || location === "/contact";
+    location === "/about" ||
+    location === "/privacy" ||
+    location === "/terms" ||
+    location === "/contact" ||
+    location === "/delete-account";
 
   useEffect(() => {
     if (!fetching) {

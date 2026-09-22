@@ -41,6 +41,7 @@ export function WallNotice({
   font = "sans",
   size = "md",
   color = "muted",
+  className,
 }: {
   title?: string;
   notice: string;
@@ -49,20 +50,25 @@ export function WallNotice({
   font?: NoticeFont;
   size?: NoticeSize;
   color?: NoticeColor;
+  className?: string;
 }) {
   const header = title.trim();
   const body = notice.trim();
   if (!header && !body && links.length === 0) return null;
 
   return (
-    <div className="w-full min-w-0 flex flex-col gap-2 leading-relaxed border border-border/70 rounded-xl px-4 py-3">
+    <div
+      className={cn(
+        "w-full min-w-0 flex flex-col gap-1 rounded-xl border border-border/60 bg-card/40 px-4 py-4 backdrop-blur-sm text-center sm:text-left leading-relaxed",
+        className,
+      )}
+    >
       {header ? (
         <p
           data-testid="text-wall-notice-title"
           className={cn(
-            "font-serif tracking-wide",
-            SIZE_CLASS[size],
-            COLOR_CLASS[color],
+            "font-serif text-lg tracking-wide text-foreground",
+            color !== "muted" && COLOR_CLASS[color],
             style === "blink" && "notice-blink",
             style === "pulse" && "notice-pulse",
           )}
@@ -74,7 +80,7 @@ export function WallNotice({
         <NoticeCopy text={body} style={style} font={font} size={size} color={color} />
       ) : null}
       {links.length > 0 ? (
-        <ul className={cn("flex flex-col gap-2", (header || body) && "mt-1")}>
+        <ul className={cn("flex flex-col gap-2", (header || body) && "mt-2")}>
           {links.map((link, index) => {
             const file = noticeLinkIsFile(link);
             return (
@@ -116,7 +122,12 @@ function NoticeCopy({
   size: NoticeSize;
   color: NoticeColor;
 }) {
-  const look = cn(FONT_CLASS[font], SIZE_CLASS[size], COLOR_CLASS[color]);
+  // Greeting body default: muted small type. Hearth overrides still apply when not default.
+  const look = cn(
+    size === "md" ? "text-sm" : SIZE_CLASS[size],
+    font === "sans" ? null : FONT_CLASS[font],
+    COLOR_CLASS[color],
+  );
 
   if (style === "scroll") {
     return (

@@ -32,3 +32,9 @@ Not a place that keeps your real name on the plaster.
 If you want likes, go where likes live.
 
 The wall is listening. It will not keep your name.
+
+---
+
+## Android (Play Store)
+
+See **[PLAYSTORE.md](./PLAYSTORE.md)** for building the AAB and publishing Pidaka on Google Play.

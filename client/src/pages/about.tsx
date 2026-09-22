@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { LEGAL_UPDATED, OPERATOR, SITE_TAGLINE_LEAD, SITE_TAGLINE_ACCENT } from "@shared/site";
-import { ContactCopy, PrivacyCopy, TermsCopy } from "@/components/legal-copy";
+import { ContactCopy, DeleteAccountCopy, PrivacyCopy, TermsCopy } from "@/components/legal-copy";
 import { SiteShell } from "@/components/site-shell";
 import { cn } from "@/lib/utils";
 
@@ -10,12 +10,14 @@ const SECTIONS = [
   { id: "privacy", href: "/privacy", label: "Privacy" },
   { id: "terms", href: "/terms", label: "Terms" },
   { id: "contact", href: "/contact", label: "Contact" },
+  { id: "delete-account", href: "/delete-account", label: "Delete" },
 ] as const;
 
 function sectionIdFromPath(pathname: string) {
   if (pathname.startsWith("/privacy")) return "privacy";
   if (pathname.startsWith("/terms")) return "terms";
   if (pathname.startsWith("/contact")) return "contact";
+  if (pathname.startsWith("/delete-account")) return "delete-account";
   return "about";
 }
 
@@ -107,6 +109,14 @@ export default function AboutPage() {
         </AboutBlock>
         <AboutBlock id="contact" kicker="Phito" title="Contact" lede="Write. The wall will not answer. We will.">
           <ContactCopy />
+        </AboutBlock>
+        <AboutBlock
+          id="delete-account"
+          kicker="Your data"
+          title="Delete account"
+          lede="Ask us to remove your name and the data still tied to it."
+        >
+          <DeleteAccountCopy />
         </AboutBlock>
       </div>
     </SiteShell>

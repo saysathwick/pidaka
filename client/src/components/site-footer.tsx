@@ -6,6 +6,7 @@ const LINKS = [
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
   { href: "/contact", label: "Contact" },
+  { href: "/delete-account", label: "Delete" },
 ] as const;
 
 export function SiteFooter({ padded = false }: { padded?: boolean }) {
