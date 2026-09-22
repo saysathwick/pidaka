@@ -74,7 +74,8 @@ export function AppHeader({
     location === "/privacy" ||
     location === "/terms" ||
     location === "/contact" ||
-    location === "/delete-account";
+    location === "/delete-account" ||
+    location === "/child-safety";
 
   useEffect(() => {
     if (!fetching) {

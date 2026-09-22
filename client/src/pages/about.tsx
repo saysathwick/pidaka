@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { LEGAL_UPDATED, OPERATOR, SITE_TAGLINE_LEAD, SITE_TAGLINE_ACCENT } from "@shared/site";
-import { ContactCopy, DeleteAccountCopy, PrivacyCopy, TermsCopy } from "@/components/legal-copy";
+import { ChildSafetyCopy, ContactCopy, DeleteAccountCopy, PrivacyCopy, TermsCopy } from "@/components/legal-copy";
 import { SiteShell } from "@/components/site-shell";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ const SECTIONS = [
   { id: "terms", href: "/terms", label: "Terms" },
   { id: "contact", href: "/contact", label: "Contact" },
   { id: "delete-account", href: "/delete-account", label: "Delete" },
+  { id: "child-safety", href: "/child-safety", label: "Child safety" },
 ] as const;
 
 function sectionIdFromPath(pathname: string) {
@@ -18,6 +19,7 @@ function sectionIdFromPath(pathname: string) {
   if (pathname.startsWith("/terms")) return "terms";
   if (pathname.startsWith("/contact")) return "contact";
   if (pathname.startsWith("/delete-account")) return "delete-account";
+  if (pathname.startsWith("/child-safety")) return "child-safety";
   return "about";
 }
 
@@ -117,6 +119,14 @@ export default function AboutPage() {
           lede="Ask us to remove your name and the data still tied to it."
         >
           <DeleteAccountCopy />
+        </AboutBlock>
+        <AboutBlock
+          id="child-safety"
+          kicker="Standards"
+          title="Child safety"
+          lede="Pidaka’s published standards against child sexual abuse and exploitation (CSAE)."
+        >
+          <ChildSafetyCopy />
         </AboutBlock>
       </div>
     </SiteShell>

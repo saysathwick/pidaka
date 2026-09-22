@@ -3,7 +3,8 @@
 App ID: `in.pidaka.app`  
 Website: https://pidaka.in  
 Privacy: https://pidaka.in/privacy  
-Delete account: https://pidaka.in/delete-account
+Delete account: https://pidaka.in/delete-account  
+Child safety (CSAE): https://pidaka.in/child-safety
 
 ---
 

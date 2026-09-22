@@ -333,3 +333,101 @@ export function DeleteAccountCopy() {
     </>
   );
 }
+
+export function ChildSafetyCopy() {
+  const reportMail = `mailto:${OPERATOR.email}?subject=${encodeURIComponent("Pidaka child safety / CSAE report")}`;
+  return (
+    <>
+      <LegalSection title="Scope">
+        <p>
+          These standards apply to <span className="font-medium text-foreground">Pidaka</span>,
+          the anonymous wall app and website operated by{" "}
+          {OPERATOR.legalName} (“Phito”). They state our zero-tolerance position
+          on child sexual abuse and exploitation (CSAE), including child sexual
+          abuse material (CSAM).
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Age">
+        <p>
+          Pidaka is for adults only. You must be at least 18 to create an account,
+          paste, or burn. We do not knowingly allow children to use the service.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="What we prohibit">
+        <p>Users may not create, upload, share, request, or distribute content that:</p>
+        <ul className="list-disc space-y-2 pl-5">
+          <li>Sexually exploits, abuses, or endangers a child</li>
+          <li>Contains or links to CSAM</li>
+          <li>Grooms, solicits, or traffics a child for sexual purposes</li>
+          <li>Otherwise facilitates CSAE</li>
+        </ul>
+        <p>
+          This ban is absolute. It is also written into our{" "}
+          <Link href="/terms" className="underline underline-offset-4">
+            Terms
+          </Link>
+          .
+        </p>
+      </LegalSection>
+
+      <LegalSection title="How to report">
+        <p>
+          If you see content or behaviour on Pidaka that may involve CSAE or CSAM,
+          report it immediately to:
+        </p>
+        <p>
+          <a className="underline underline-offset-4" href={reportMail}>
+            {OPERATOR.email}
+          </a>
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Include the anonymous name if you have one, the time, and any text you
+          can safely quote. Do not forward illegal images. You may also use{" "}
+          <Link href="/contact" className="underline underline-offset-4">
+            Contact
+          </Link>
+          .
+        </p>
+      </LegalSection>
+
+      <LegalSection title="What we do when we know">
+        <p>
+          When we obtain actual knowledge of CSAM or CSAE on Pidaka, we take
+          appropriate action without delay. That includes removing the content,
+          restricting or deleting the account, and preserving records needed for a
+          lawful report.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Law and authorities">
+        <p>
+          We comply with applicable child-safety laws. Where we confirm CSAM, we
+          report it to the relevant authority — including India’s cybercrime /
+          child-protection channels as required, and, where applicable, the
+          National Center for Missing &amp; Exploited Children (NCMEC) or the
+          equivalent body for the jurisdiction involved.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="Child safety contact">
+        <p>
+          For notifications from Google Play or other platforms about CSAE on
+          Pidaka, contact:
+        </p>
+        <p>
+          {OPERATOR.legalName}
+          <br />
+          <a className="underline underline-offset-4" href={`mailto:${OPERATOR.email}`}>
+            {OPERATOR.email}
+          </a>
+        </p>
+        <p className="text-sm text-muted-foreground">
+          This mailbox is monitored for child-safety matters and can act on
+          enforcement and review.
+        </p>
+      </LegalSection>
+    </>
+  );
+}

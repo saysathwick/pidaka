@@ -17,7 +17,7 @@ export const OPERATOR = {
 
 export const LEGAL_UPDATED = "21 August 2026";
 
-export const APP_PATHS = ["/", "/inbox", "/about", "/privacy", "/terms", "/contact", "/delete-account"] as const;
+export const APP_PATHS = ["/", "/inbox", "/about", "/privacy", "/terms", "/contact", "/delete-account", "/child-safety"] as const;
 
 export type AppPath = (typeof APP_PATHS)[number];
 
@@ -54,6 +54,10 @@ const PAGE_META: Record<AppPath, PageMeta> = {
   "/delete-account": {
     title: "Delete account — Pidaka",
     description: "Request deletion of your Pidaka account and associated data.",
+  },
+  "/child-safety": {
+    title: "Child safety — Pidaka",
+    description: "Pidaka standards against child sexual abuse and exploitation (CSAE).",
   },
 };
 

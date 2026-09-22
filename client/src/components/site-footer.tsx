@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/terms", label: "Terms" },
   { href: "/contact", label: "Contact" },
   { href: "/delete-account", label: "Delete" },
+  { href: "/child-safety", label: "Child safety" },
 ] as const;
 
 export function SiteFooter({ padded = false }: { padded?: boolean }) {

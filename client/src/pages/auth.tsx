@@ -174,7 +174,7 @@ export function AuthForm() {
           result.reason === "denied"
             ? "Allow location for this site in your browser or phone settings, then try again."
             : result.reason === "timeout"
-              ? "Location took too long. Try again near a window, or just read the wall."
+              ? "Could not get a fix in time. Step outside or turn on location services, then try again."
               : result.reason === "unsupported"
                 ? "This device cannot share location. Use another door, or just read the wall."
                 : "Location did not come through. Try again, or just read the wall.";
@@ -397,16 +397,15 @@ export function AuthForm() {
       {step === "guest-place" && (
         <div className="flex flex-col gap-4">
           <p className="text-sm text-center text-muted-foreground leading-relaxed">
-            Waiting on location permission…
+            Finding your place…
           </p>
           <p className="text-[11px] text-center text-muted-foreground leading-relaxed">
-            Your browser or phone should ask now. Allow it to take a guest name.
+            Permission is granted. Waiting on a GPS or network fix — this can take a little longer indoors.
           </p>
           <Button
             type="button"
             variant="ghost"
             className="h-10 text-muted-foreground"
-            disabled={loading === "guest"}
             onClick={browseAsGuest}
             data-testid="button-guest-place-skip"
           >
