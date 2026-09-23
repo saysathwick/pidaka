@@ -18,6 +18,7 @@ import {
   phoneStartSchema,
   phoneVerifySchema,
   guestAuthSchema,
+  deviceDetailsSchema,
   adminSessionSchema,
   wallSettingsPatchSchema,
 } from "@shared/schema";
@@ -53,6 +54,31 @@ import { readPublicWall, readWallSettings, toPublicWall } from "./wall-settings"
 import { parseNoticeColor, parseNoticeFont, parseNoticeSize, parseNoticeStyle, sanitizeNoticeLinks, settingsHaveADoor } from "@shared/wall";
 import { matchModerationKeywords, sanitizeModerationKeywords } from "@shared/moderation";
 import { sanitizeBurnAlertBodyMany, sanitizeBurnAlertBodyOne, sanitizeBurnAlertTitle } from "@shared/burn-alert";
+
+function deviceJsonFromBody(device: {
+  platform?: string;
+  language?: string;
+  timezone?: string;
+  userAgent?: string;
+  screen?: string;
+  brand?: string;
+  model?: string;
+  os?: string;
+  osVersion?: string;
+} | undefined) {
+  return JSON.stringify({
+    platform: device?.platform?.slice(0, 40) || "",
+    language: device?.language?.slice(0, 40) || "",
+    timezone: device?.timezone?.slice(0, 80) || "",
+    userAgent: device?.userAgent?.slice(0, 512) || "",
+    screen: device?.screen?.slice(0, 40) || "",
+    brand: device?.brand?.slice(0, 40) || "",
+    model: device?.model?.slice(0, 80) || "",
+    os: device?.os?.slice(0, 40) || "",
+    osVersion: device?.osVersion?.slice(0, 40) || "",
+    at: new Date().toISOString(),
+  });
+}
 import { generateAnonymousName } from "@shared/names";
 import { log } from "./index";
 import { appAuthBridgeHtml, appAuthBridgePath, appAuthBridgeQuery } from "./app-auth";
@@ -452,7 +478,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: parsed.error.errors[0].message });
       }
 
-      const saidOrigin = parsed.data.saidOrigin.trim().replace(/\s+/g, " ");
+      const saidOrigin = (parsed.data.saidOrigin ?? "").trim().replace(/\s+/g, " ");
       const locationJson = parsed.data.location
         ? JSON.stringify({
             lat: parsed.data.location.lat,
@@ -464,13 +490,7 @@ export async function registerRoutes(
             timedOut: Boolean(parsed.data.locationTimedOut),
             at: new Date().toISOString(),
           });
-      const deviceJson = JSON.stringify({
-        platform: parsed.data.device?.platform?.slice(0, 40) || "",
-        language: parsed.data.device?.language?.slice(0, 40) || "",
-        timezone: parsed.data.device?.timezone?.slice(0, 80) || "",
-        userAgent: parsed.data.device?.userAgent?.slice(0, 512) || "",
-        screen: parsed.data.device?.screen?.slice(0, 40) || "",
-      });
+      const deviceJson = deviceJsonFromBody(parsed.data.device);
 
       if (!parsed.data.location && !parsed.data.locationTimedOut) {
         return res.status(400).json({ message: "Location is needed for a guest name" });
@@ -735,6 +755,20 @@ export async function registerRoutes(
   app.post("/api/auth/logout", (_req: Request, res: Response) => {
     clearSessionCookie(res);
     return res.json({ ok: true });
+  });
+
+  app.post("/api/auth/device", authMiddleware as any, async (req: AuthRequest, res: Response) => {
+    try {
+      const parsed = deviceDetailsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0].message });
+      }
+      const deviceJson = deviceJsonFromBody(parsed.data.device);
+      await storage.updateDeviceJson(req.userId!, deviceJson);
+      return res.json({ ok: true });
+    } catch (err) {
+      return serverError(res, "Could not keep device details", err);
+    }
   });
 
   app.get("/api/auth/me", authMiddleware as any, async (req: AuthRequest, res: Response) => {

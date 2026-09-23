@@ -15,7 +15,7 @@ export const OPERATOR = {
   ],
 } as const;
 
-export const LEGAL_UPDATED = "21 August 2026";
+export const LEGAL_UPDATED = "23 September 2026";
 
 export const APP_PATHS = ["/", "/inbox", "/about", "/privacy", "/terms", "/contact", "/delete-account", "/child-safety"] as const;
 

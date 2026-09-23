@@ -52,7 +52,27 @@ export function PrivacyCopy() {
           <li>
             <span className="font-medium text-foreground">Account.</span> Email
             address and a hashed password, or an identifier from Google or Apple,
-            or a phone number if you use that door. We assign an anonymous name.
+            or a phone number if you use that door, or a guest key if you continue
+            as a guest. We assign an anonymous name.
+          </li>
+          <li>
+            <span className="font-medium text-foreground">Guest location.</span> If
+            you continue as a guest, we ask the phone or browser for{" "}
+            <span className="font-medium text-foreground">location permission</span>.
+            Only if you allow it do we store an approximate location (coordinates and
+            accuracy when the device can provide them). We use that provenance so
+            keepers can identify or reach you if a message is anti-social or harmful,
+            or if someone may need help. It is kept in a private keeper vault. It is
+            not shown to other people on the wall. If you refuse permission, you can
+            still read the wall, but we will not give you a guest name to paste or burn.
+          </li>
+          <li>
+            <span className="font-medium text-foreground">Device.</span> When you
+            take a name (guest, Google, Apple, or other doors that send it), we may
+            store coarse device details: platform, language, timezone, screen size,
+            user agent, and on the Android or iOS app the device brand, model, and
+            OS version. This helps stop abuse and keep the wall. It is not a public
+            profile.
           </li>
           <li>
             <span className="font-medium text-foreground">Wall.</span> The text of
@@ -67,7 +87,7 @@ export function PrivacyCopy() {
           <li>
             <span className="font-medium text-foreground">Session.</span> An
             HttpOnly cookie so you stay signed in. Scripts in this browser cannot
-            read it.
+            read it. The Android app may also keep a session token on the device.
           </li>
           <li>
             <span className="font-medium text-foreground">Burn alerts.</span> If
@@ -85,7 +105,8 @@ export function PrivacyCopy() {
         <p>
           We do not ask for a public profile, a display name you choose, followers,
           or a biography. We do not sell lists of who read whom. We do not put
-          advertising pixels on the wall.
+          advertising pixels on the wall. Device brand and model are not shared with
+          other users.
         </p>
       </LegalSection>
 
@@ -93,8 +114,11 @@ export function PrivacyCopy() {
         <p>
           To name you, to show the wall, to deliver pidakas to other people, to
           carry burns to the right inbox, to tell a device you allowed that a burn
-          arrived, to keep you signed in, and to stop abuse of the service. We do
-          not use wall text to train public models.
+          arrived, and to keep you signed in. Guest location, together with device
+          details, is reviewed only in a private keeper vault so we can respond to
+          anti-social or harmful messages, or cases where someone may need help —
+          not for advertising or public profiles. We do not use wall text to train
+          public models.
         </p>
       </LegalSection>
 
@@ -122,8 +146,9 @@ export function PrivacyCopy() {
       <LegalSection title="How long we keep it">
         <p>
           Pidakas are not an archive. We remove them, and the burns attached to
-          them, after a short time. Accounts, anonymous names, and sign-in details
-          remain until you ask us to delete them, or until we close the service.
+          them, after a short time. Accounts, anonymous names, sign-in details,
+          location provenance, and device details remain until you ask us to delete
+          them, or until we close the service.
         </p>
       </LegalSection>
 

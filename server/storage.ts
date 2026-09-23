@@ -32,6 +32,7 @@ export interface IStorage {
     userId: string,
     data: { saidOrigin: string; locationJson: string; deviceJson: string },
   ): Promise<void>;
+  updateDeviceJson(userId: string, deviceJson: string): Promise<void>;
   getUserStats(id: string): Promise<{ burnsSentCount: number; burnsReceivedCount: number }>;
 
   getActivePidakas(): Promise<Pidaka[]>;
@@ -138,6 +139,10 @@ export class DatabaseStorage implements IStorage {
         deviceJson: data.deviceJson,
       })
       .where(eq(users.id, userId));
+  }
+
+  async updateDeviceJson(userId: string, deviceJson: string) {
+    await db.update(users).set({ deviceJson }).where(eq(users.id, userId));
   }
 
   async getUserByAnonymousName(name: string): Promise<User | undefined> {

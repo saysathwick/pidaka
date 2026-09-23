@@ -31,6 +31,70 @@ export function readDeviceDetails() {
   };
 }
 
+export type DeviceDetails = {
+  platform: string;
+  language: string;
+  timezone: string;
+  userAgent: string;
+  screen: string;
+  brand?: string;
+  model?: string;
+  os?: string;
+  osVersion?: string;
+};
+
+/** Sync browser/OS basics; on native apps also brand + model via Capacitor Device. */
+export async function collectDeviceDetails(): Promise<DeviceDetails> {
+  const base: DeviceDetails = readDeviceDetails();
+  if (!Capacitor.isNativePlatform()) return base;
+  try {
+    const { Device } = await import("@capacitor/device");
+    const info = await Device.getInfo();
+    return {
+      ...base,
+      platform: info.platform || base.platform,
+      brand: String(info.manufacturer || "").slice(0, 40),
+      model: String(info.model || "").slice(0, 80),
+      os: String(info.operatingSystem || "").slice(0, 40),
+      osVersion: String(info.osVersion || "").slice(0, 40),
+    };
+  } catch {
+    return base;
+  }
+}
+
+const DEVICE_STASH_KEY = "pidaka_pending_device";
+
+/** Stash before OAuth redirect / Custom Tab so we can save it after the session returns. */
+export async function stashAuthDeviceDetails() {
+  try {
+    const device = await collectDeviceDetails();
+    sessionStorage.setItem(DEVICE_STASH_KEY, JSON.stringify(device));
+  } catch {
+    // private mode / unavailable
+  }
+}
+
+export async function flushAuthDeviceDetails(
+  post: (device: DeviceDetails) => Promise<unknown>,
+) {
+  let raw: string | null = null;
+  try {
+    raw = sessionStorage.getItem(DEVICE_STASH_KEY);
+    if (raw) sessionStorage.removeItem(DEVICE_STASH_KEY);
+  } catch {
+    return;
+  }
+  if (!raw) return;
+  try {
+    const device = JSON.parse(raw) as DeviceDetails;
+    if (!device || typeof device !== "object") return;
+    await post(device);
+  } catch {
+    // best-effort; naming still works without device
+  }
+}
+
 export type GuestLocation = {
   lat: number;
   lng: number;

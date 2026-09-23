@@ -3,6 +3,8 @@ import { dropBurnSubscription } from "@/lib/push-client";
 import { dropNativePushToken } from "@/lib/native-push";
 import { apiUrl, isNativeApp } from "@/lib/api-base";
 import { listenForNativeOAuthReturn, type OAuthReturnParams } from "@/lib/native-auth";
+import { flushAuthDeviceDetails } from "@/lib/guest-auth";
+import { apiRequest } from "@/lib/queryClient";
 
 interface UserData {
   anonymousName: string;
@@ -102,7 +104,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (params.named) namedRef.current = true;
     if (params.token) localStorage.setItem("pidaka_token", params.token);
     setIsLoading(true);
-    void refreshUser();
+    void (async () => {
+      await refreshUser();
+      await flushAuthDeviceDetails(async (device) => {
+        await apiRequest("POST", "/api/auth/device", { device });
+      });
+    })();
   }, [refreshUser]);
 
   useEffect(() => {

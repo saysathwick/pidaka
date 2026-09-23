@@ -142,9 +142,22 @@ export const phoneVerifySchema = z.object({
   code: z.string().regex(/^\d{6}$/, "Enter the six-digit code"),
 });
 
+export const deviceFieldsSchema = z.object({
+  platform: z.string().max(40).optional(),
+  language: z.string().max(40).optional(),
+  timezone: z.string().max(80).optional(),
+  userAgent: z.string().max(512).optional(),
+  screen: z.string().max(40).optional(),
+  brand: z.string().max(40).optional(),
+  model: z.string().max(80).optional(),
+  os: z.string().max(40).optional(),
+  osVersion: z.string().max(40).optional(),
+});
+
 export const guestAuthSchema = z.object({
   guestKey: z.string().min(16).max(128),
-  saidOrigin: z.string().trim().min(2, "Tell us where you are from").max(120),
+  /** Kept optional for older clients; guest place now comes from device location only. */
+  saidOrigin: z.string().trim().max(120).optional(),
   location: z
     .object({
       lat: z.number().min(-90).max(90),
@@ -153,13 +166,11 @@ export const guestAuthSchema = z.object({
     })
     .optional(),
   locationTimedOut: z.boolean().optional(),
-  device: z.object({
-    platform: z.string().max(40).optional(),
-    language: z.string().max(40).optional(),
-    timezone: z.string().max(80).optional(),
-    userAgent: z.string().max(512).optional(),
-    screen: z.string().max(40).optional(),
-  }).optional(),
+  device: deviceFieldsSchema.optional(),
+});
+
+export const deviceDetailsSchema = z.object({
+  device: deviceFieldsSchema,
 });
 
 export const insertPidakaSchema = z.object({

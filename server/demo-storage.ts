@@ -156,6 +156,12 @@ export class DemoStorage implements IStorage {
     user.deviceJson = data.deviceJson;
   }
 
+  async updateDeviceJson(userId: string, deviceJson: string) {
+    const user = this.users.get(userId);
+    if (!user) return;
+    user.deviceJson = deviceJson;
+  }
+
   async getUserStats(id: string) {
     const user = this.users.get(id);
     return {

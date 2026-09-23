@@ -6,6 +6,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { isNativeApp } from "@/lib/api-base";
 import { openNativeOAuth } from "@/lib/native-auth";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -22,7 +23,7 @@ import { ArrowLeft, Mail } from "lucide-react";
 import { Link } from "wouter";
 import { usePublicWall } from "@/lib/wall";
 import { isPlausibleEmail } from "@shared/schema";
-import { guestKey, readDeviceDetails, requestGuestLocation } from "@/lib/guest-auth";
+import { guestKey, collectDeviceDetails, requestGuestLocation, stashAuthDeviceDetails } from "@/lib/guest-auth";
 
 function formMessage(err: unknown, fallback: string) {
   const raw = err instanceof Error ? err.message : fallback;
@@ -64,13 +65,15 @@ export function AuthForm() {
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const [saidOrigin, setSaidOrigin] = useState("");
+  const [privacyConsent, setPrivacyConsent] = useState(false);
+  const [locationConsent, setLocationConsent] = useState(false);
   const [loading, setLoading] = useState<"google" | "apple" | "phone" | "email" | "guest" | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const { completeSession, authError, clearAuthError } = useAuth();
   const { toast } = useToast();
   const { hideAuth } = useAuthModal();
   const { data: wall } = usePublicWall();
+  const canSignIn = privacyConsent && loading === null;
 
   useEffect(() => {
     if (!authError) return;
@@ -86,6 +89,12 @@ export function AuthForm() {
   const submitEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    if (!privacyConsent) {
+      const message = "Accept the privacy policy before signing in.";
+      setFormError(message);
+      toast({ title: "Privacy policy", description: message, variant: "destructive" });
+      return;
+    }
     setLoading("email");
     if (!isPlausibleEmail(email)) {
       const message = "Enter a real email address";
@@ -119,6 +128,12 @@ export function AuthForm() {
   const startPhone = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    if (!privacyConsent) {
+      const message = "Accept the privacy policy before signing in.";
+      setFormError(message);
+      toast({ title: "Privacy policy", description: message, variant: "destructive" });
+      return;
+    }
     setLoading("phone");
     try {
       const res = await apiRequest("POST", "/api/auth/phone/start", { phone });
@@ -164,7 +179,7 @@ export function AuthForm() {
     hideAuth();
   };
 
-  const finishGuestWithLocation = async (origin: string, locationPromise: ReturnType<typeof requestGuestLocation>) => {
+  const finishGuestWithLocation = async (locationPromise: ReturnType<typeof requestGuestLocation>) => {
     setLoading("guest");
     setStep("guest-place");
     try {
@@ -174,9 +189,8 @@ export function AuthForm() {
         if (result.reason === "timeout" && result.permissionGranted) {
           const res = await apiRequest("POST", "/api/auth/guest", {
             guestKey: guestKey(),
-            saidOrigin: origin,
             locationTimedOut: true,
-            device: readDeviceDetails(),
+            device: await collectDeviceDetails(),
           });
           const data = await res.json();
           completeSession(data);
@@ -202,9 +216,8 @@ export function AuthForm() {
       }
       const res = await apiRequest("POST", "/api/auth/guest", {
         guestKey: guestKey(),
-        saidOrigin: origin,
         location: result.location,
-        device: readDeviceDetails(),
+        device: await collectDeviceDetails(),
       });
       const data = await res.json();
       completeSession(data);
@@ -222,17 +235,48 @@ export function AuthForm() {
   const startGuestNaming = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-    const origin = saidOrigin.trim();
-    if (origin.length < 2) {
-      const message = "Tell us where you are from";
+    if (!privacyConsent) {
+      const message = "Accept the privacy policy before we can name you.";
       setFormError(message);
-      toast({ title: "One more thing", description: message, variant: "destructive" });
+      toast({ title: "Privacy policy", description: message, variant: "destructive" });
+      return;
+    }
+    if (!locationConsent) {
+      const message = "Accept location permission before we can name you.";
+      setFormError(message);
+      toast({ title: "Location consent needed", description: message, variant: "destructive" });
       return;
     }
     // Start geolocation in the same user gesture so the browser/OS prompt can appear.
     const locationPromise = requestGuestLocation();
-    await finishGuestWithLocation(origin, locationPromise);
+    await finishGuestWithLocation(locationPromise);
   };
+
+  const privacyCheckbox = (
+    <label
+      htmlFor="auth-privacy-consent"
+      className="flex items-start gap-3 rounded-md border border-border/80 bg-muted/30 px-3 py-3 cursor-pointer"
+    >
+      <Checkbox
+        id="auth-privacy-consent"
+        checked={privacyConsent}
+        onCheckedChange={(checked) => setPrivacyConsent(checked === true)}
+        className="mt-0.5"
+        data-testid="checkbox-auth-privacy-consent"
+      />
+      <span className="text-[11px] leading-relaxed text-muted-foreground">
+        I have read and agree to the{" "}
+        <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground" onClick={hideAuth}>
+          Privacy policy
+        </Link>{" "}
+        and{" "}
+        <Link href="/terms" className="underline underline-offset-2 hover:text-foreground" onClick={hideAuth}>
+          Terms
+        </Link>
+        .
+      </span>
+    </label>
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -255,6 +299,7 @@ export function AuthForm() {
 
       {step === "choose" && (
         <div className="flex flex-col gap-2.5">
+          {privacyCheckbox}
           {wall && !wall.google && !wall.apple && !wall.phone && !wall.email && !wall.guest && (
             <p className="text-center text-sm text-muted-foreground">
               The wall is not taking anyone in tonight.
@@ -265,14 +310,22 @@ export function AuthForm() {
               type="button"
               variant="outline"
               className="h-11 justify-start gap-3 bg-background text-foreground border-input"
-              disabled={loading !== null}
+              disabled={!canSignIn}
               onClick={() => {
+                if (!privacyConsent) return;
                 setLoading("google");
-                if (isNativeApp()) {
-                  void openNativeOAuth("google").finally(() => setLoading(null));
-                  return;
-                }
-                window.location.href = "/api/auth/google";
+                void (async () => {
+                  await stashAuthDeviceDetails();
+                  if (isNativeApp()) {
+                    try {
+                      await openNativeOAuth("google");
+                    } finally {
+                      setLoading(null);
+                    }
+                    return;
+                  }
+                  window.location.href = "/api/auth/google";
+                })();
               }}
               data-testid="button-auth-google"
             >
@@ -285,14 +338,22 @@ export function AuthForm() {
               type="button"
               variant="outline"
               className="h-11 justify-start gap-3 bg-background text-foreground border-input"
-              disabled={loading !== null}
+              disabled={!canSignIn}
               onClick={() => {
+                if (!privacyConsent) return;
                 setLoading("apple");
-                if (isNativeApp()) {
-                  void openNativeOAuth("apple").finally(() => setLoading(null));
-                  return;
-                }
-                window.location.href = "/api/auth/apple";
+                void (async () => {
+                  await stashAuthDeviceDetails();
+                  if (isNativeApp()) {
+                    try {
+                      await openNativeOAuth("apple");
+                    } finally {
+                      setLoading(null);
+                    }
+                    return;
+                  }
+                  window.location.href = "/api/auth/apple";
+                })();
               }}
               data-testid="button-auth-apple"
             >
@@ -305,8 +366,11 @@ export function AuthForm() {
               type="button"
               variant="outline"
               className="h-11 justify-start gap-3 bg-background text-foreground border-input"
-              disabled={loading !== null}
-              onClick={() => setStep("phone")}
+              disabled={!canSignIn}
+              onClick={() => {
+                if (!privacyConsent) return;
+                setStep("phone");
+              }}
               data-testid="button-auth-phone"
             >
               <span className="inline-flex h-4 w-4 items-center justify-center text-[13px] font-semibold">+</span>
@@ -318,8 +382,9 @@ export function AuthForm() {
               type="button"
               variant="outline"
               className="h-11 justify-start gap-3 bg-background text-foreground border-input"
-              disabled={loading !== null}
+              disabled={!canSignIn}
               onClick={() => {
+                if (!privacyConsent) return;
                 setEmailMode(wall?.registrations === false ? "login" : "register");
                 setFormError(null);
                 setStep("email");
@@ -341,8 +406,9 @@ export function AuthForm() {
                 type="button"
                 variant="ghost"
                 className="h-11 text-muted-foreground hover:text-foreground"
-                disabled={loading !== null}
+                disabled={!canSignIn}
                 onClick={() => {
+                  if (!privacyConsent) return;
                   setFormError(null);
                   if (wall?.registrations === false) {
                     browseAsGuest();
@@ -352,7 +418,7 @@ export function AuthForm() {
                     });
                     return;
                   }
-                  setSaidOrigin("");
+                  setLocationConsent(false);
                   setStep("guest-origin");
                 }}
                 data-testid="button-auth-guest"
@@ -360,7 +426,7 @@ export function AuthForm() {
                 Continue as guest
               </Button>
               <p className="text-center text-[11px] leading-relaxed text-muted-foreground -mt-1">
-                Read free, or share where you are from and location to take a name.
+                Read free, or allow location on this device to take a name.
               </p>
             </>
           )}
@@ -372,31 +438,43 @@ export function AuthForm() {
           <button
             type="button"
             className="self-start inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
-            onClick={() => setStep("choose")}
+            onClick={() => {
+              setLocationConsent(false);
+              setStep("choose");
+            }}
           >
             <ArrowLeft className="h-3 w-3" />
             Other ways
           </button>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="guest-origin" className="text-xs uppercase tracking-wider">
-              Where are you from?
-            </Label>
-            <Input
-              id="guest-origin"
-              value={saidOrigin}
-              onChange={(e) => setSaidOrigin(e.target.value)}
-              maxLength={120}
-              placeholder="City, region, or country"
-              autoComplete="address-level2"
-              required
-              data-testid="input-guest-origin"
+          <p className="text-sm text-center text-muted-foreground leading-relaxed">
+            Guest names use this device’s location so keepers can respond if a message
+            is harmful or someone may need help. It is not shown on the wall.
+          </p>
+          {privacyCheckbox}
+          <label
+            htmlFor="guest-location-consent"
+            className="flex items-start gap-3 rounded-md border border-border/80 bg-muted/30 px-3 py-3 cursor-pointer"
+          >
+            <Checkbox
+              id="guest-location-consent"
+              checked={locationConsent}
+              onCheckedChange={(checked) => setLocationConsent(checked === true)}
+              className="mt-0.5"
+              data-testid="checkbox-guest-location-consent"
             />
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Next we ask for location on this device. If you allow it, Pidaka names you so you can paste and burn. If you refuse, you stay a reader.
-            </p>
-          </div>
-          <Button type="submit" className="h-11" disabled={loading === "guest"} data-testid="button-guest-origin-continue">
-            {loading === "guest" ? "Waiting..." : "Continue"}
+            <span className="text-[11px] leading-relaxed text-muted-foreground">
+              I allow Pidaka to use this device’s location for security purpose. After
+              this, the phone will ask for permission, you must allow that too to take
+              a guest name.
+            </span>
+          </label>
+          <Button
+            type="submit"
+            className="h-11"
+            disabled={loading === "guest" || !privacyConsent || !locationConsent}
+            data-testid="button-guest-origin-continue"
+          >
+            {loading === "guest" ? "Waiting..." : "Allow location & continue"}
           </Button>
           <Button
             type="button"
@@ -497,7 +575,7 @@ export function AuthForm() {
               data-testid="input-password"
             />
           </div>
-          <Button type="submit" disabled={loading === "email"} data-testid="button-email-submit">
+          <Button type="submit" disabled={loading === "email" || !privacyConsent} data-testid="button-email-submit">
             {loading === "email"
               ? emailMode === "register" ? "Creating..." : "Signing in..."
               : emailMode === "register" ? "Create account" : "Sign in"}
@@ -532,7 +610,7 @@ export function AuthForm() {
               data-testid="input-phone"
             />
           </div>
-          <Button type="submit" disabled={loading === "phone"} data-testid="button-send-code">
+          <Button type="submit" disabled={loading === "phone" || !privacyConsent} data-testid="button-send-code">
             {loading === "phone" ? "Sending..." : "Send a code"}
           </Button>
         </form>
@@ -580,18 +658,6 @@ export function AuthForm() {
           <p className="text-xs text-muted-foreground text-center">Sent to {phone}</p>
         </form>
       )}
-
-      <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
-        By continuing you agree to the{" "}
-        <Link href="/terms" className="underline underline-offset-2 hover:text-foreground" onClick={hideAuth}>
-          Terms
-        </Link>{" "}
-        and{" "}
-        <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground" onClick={hideAuth}>
-          Privacy
-        </Link>
-        .
-      </p>
     </div>
   );
 }
