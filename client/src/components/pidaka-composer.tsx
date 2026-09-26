@@ -160,8 +160,8 @@ export function ComposeFab({
         <motion.div
           className="pointer-events-none fixed z-40"
           style={{
-            right: "max(1rem, env(safe-area-inset-right))",
-            bottom: "max(1.25rem, env(safe-area-inset-bottom))",
+            right: "max(1rem, var(--safe-right, env(safe-area-inset-right, 0px)))",
+            bottom: "max(1.25rem, calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 0.35rem))",
           }}
           initial={{ opacity: 0, y: 12, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { LogOut, MessageCircle, Moon, Sun, ArrowLeft } from "lucide-react";
+import { ArrowLeft, LogOut, Menu, MessageCircle, Moon, Sun } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useAuthModal } from "@/lib/auth-modal";
 import { useTheme } from "@/lib/theme";
@@ -16,6 +16,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PidakaMark } from "@/components/pidaka-logo";
+import { AppMenu } from "@/components/app-menu";
 import { cn } from "@/lib/utils";
 
 function IconAction({
@@ -40,7 +41,7 @@ function IconAction({
           onClick={onClick}
           aria-label={label}
           aria-current={current ? "page" : undefined}
-          className={cn(current && "bg-secondary")}
+          className={cn("h-10 w-10", current && "bg-secondary")}
           data-testid={testId}
         >
           {children}
@@ -66,16 +67,9 @@ export function AppHeader({
   const [location, navigate] = useLocation();
   const unread = user?.unreadCount ?? 0;
   const [busy, setBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
-
-  const aboutOpen =
-    location === "/about" ||
-    location === "/privacy" ||
-    location === "/terms" ||
-    location === "/contact" ||
-    location === "/delete-account" ||
-    location === "/child-safety";
 
   useEffect(() => {
     if (!fetching) {
@@ -87,9 +81,9 @@ export function AppHeader({
   }, [fetching]);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/60 bg-background/75 backdrop-blur-xl">
-      <div className="max-w-6xl mx-auto flex items-center justify-between gap-2 px-4 py-2.5">
-        <div className="flex min-w-0 items-center gap-1">
+    <header className="app-header sticky top-0 z-50 border-b border-border/60 bg-background/75 backdrop-blur-xl">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-3 sm:h-[3.75rem] sm:px-4">
+        <div className="flex min-w-0 items-center gap-0.5">
           {place === "burns" && (
             <IconAction
               label="Back to the wall"
@@ -101,45 +95,37 @@ export function AppHeader({
           )}
           <button
             type="button"
-            className="flex min-w-0 items-center gap-2.5 rounded-md px-1 py-1 text-left hover-elevate"
+            className="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left hover-elevate"
             onClick={() => navigate("/")}
             data-testid="text-brand"
           >
-          <PidakaMark className="h-8 w-8 shrink-0" isLit={place === "burns" || Boolean(user)} />
-          <span className="flex min-w-0 flex-col justify-center">
-            <span className="font-serif text-xl leading-none tracking-[0.22em] uppercase text-[#3d2a1a] dark:text-[#d4c4a8]">
-              Pidaka
+            <PidakaMark className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" isLit={place === "burns" || Boolean(user)} />
+            <span className="flex min-w-0 flex-col justify-center">
+              <span className="font-serif text-lg leading-none tracking-[0.18em] uppercase text-[#3d2a1a] dark:text-[#d4c4a8] sm:text-xl sm:tracking-[0.22em]">
+                Pidaka
+              </span>
+              {place === "wall" && (
+                <span className="mt-0.5 hidden font-serif text-[10px] tracking-wide text-[#6b5340] dark:text-[#a89078] sm:mt-1 sm:block">
+                  pidaka.in
+                </span>
+              )}
+              {place === "burns" && (
+                <span
+                  className="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+                  data-testid="text-inbox-title"
+                >
+                  Burns
+                </span>
+              )}
             </span>
-            {place === "wall" && (
-              <span className="mt-1 font-serif text-[10px] tracking-wide text-[#6b5340] dark:text-[#a89078]">
-                pidaka.in
-              </span>
-            )}
-            {place === "burns" && (
-              <span className="mt-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground" data-testid="text-inbox-title">
-                Burns
-              </span>
-            )}
-          </span>
-        </button>
+          </button>
         </div>
 
         <div className="flex shrink-0 items-center gap-0.5">
-          <button
-            type="button"
-            className={cn(
-              "mr-1 hidden px-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground md:inline",
-              aboutOpen && "text-foreground",
-            )}
-            onClick={() => navigate("/about")}
-            data-testid="link-header-about"
-          >
-            About
-          </button>
           {user ? (
             <>
               <span
-                className="mr-1 hidden max-w-[9rem] truncate rounded-full border border-border/70 bg-card/80 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-foreground sm:inline"
+                className="mr-1 hidden max-w-[9rem] truncate rounded-full border border-border/70 bg-card/80 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-foreground lg:inline"
                 title="This name is only yours. The wall will never show it."
                 data-testid="text-username"
               >
@@ -154,51 +140,79 @@ export function AppHeader({
                 <span className="relative">
                   <MessageCircle className="h-4 w-4" />
                   {unread > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" data-testid="badge-unread" />
+                    <span
+                      className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary"
+                      data-testid="badge-unread"
+                    />
                   )}
                 </span>
               </IconAction>
-              <IconAction
-                label={`${accentName}. Next accent`}
-                onClick={cycleAccent}
-                testId="button-accent-cycle"
-              >
-                <span className="h-3.5 w-3.5 rounded-full bg-primary ring-1 ring-primary/40" />
-              </IconAction>
-              <IconAction
-                label={theme === "dark" ? "Light wall" : "Dark wall"}
-                onClick={toggleTheme}
-                testId="button-theme-toggle"
-              >
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </IconAction>
-              <IconAction label="Leave" onClick={() => setLeaveOpen(true)} testId="button-logout">
-                <LogOut className="h-4 w-4" />
-              </IconAction>
+              <div className="hidden items-center gap-0.5 md:flex">
+                <IconAction
+                  label={`${accentName}. Next accent`}
+                  onClick={cycleAccent}
+                  testId="button-accent-cycle"
+                >
+                  <span className="h-3.5 w-3.5 rounded-full bg-primary ring-1 ring-primary/40" />
+                </IconAction>
+                <IconAction
+                  label={theme === "dark" ? "Light wall" : "Dark wall"}
+                  onClick={toggleTheme}
+                  testId="button-theme-toggle"
+                >
+                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </IconAction>
+                <IconAction label="Leave" onClick={() => setLeaveOpen(true)} testId="button-logout">
+                  <LogOut className="h-4 w-4" />
+                </IconAction>
+              </div>
             </>
           ) : (
             <>
-              <IconAction
-                label={`${accentName}. Next accent`}
-                onClick={cycleAccent}
-                testId="button-accent-cycle"
+              <div className="hidden items-center gap-0.5 md:flex">
+                <IconAction
+                  label={`${accentName}. Next accent`}
+                  onClick={cycleAccent}
+                  testId="button-accent-cycle"
+                >
+                  <span className="h-3.5 w-3.5 rounded-full bg-primary ring-1 ring-primary/40" />
+                </IconAction>
+                <IconAction
+                  label={theme === "dark" ? "Light wall" : "Dark wall"}
+                  onClick={toggleTheme}
+                  testId="button-theme-toggle"
+                >
+                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </IconAction>
+              </div>
+              <Button
+                size="sm"
+                className="mr-0.5 h-9 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"
+                onClick={showAuth}
+                data-testid="button-drop-mask"
               >
-                <span className="h-3.5 w-3.5 rounded-full bg-primary ring-1 ring-primary/40" />
-              </IconAction>
-              <IconAction
-                label={theme === "dark" ? "Light wall" : "Dark wall"}
-                onClick={toggleTheme}
-                testId="button-theme-toggle"
-              >
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </IconAction>
-              <Button size="sm" onClick={showAuth} data-testid="button-drop-mask">
-                Drop your mask
+                <span className="sm:hidden">Sign in</span>
+                <span className="hidden sm:inline">Drop your mask</span>
               </Button>
             </>
           )}
+
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-10 w-10"
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(true)}
+            data-testid="button-open-menu"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
         </div>
       </div>
+
+      <AppMenu open={menuOpen} onOpenChange={setMenuOpen} />
+
       <AlertDialog
         open={leaveOpen}
         onOpenChange={(open) => {
@@ -208,7 +222,9 @@ export function AppHeader({
       >
         <AlertDialogContent className="!fixed left-1/2 top-[42%] z-[90] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border-border sm:top-1/2">
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-serif text-2xl font-normal">Leave the wall?</AlertDialogTitle>
+            <AlertDialogTitle className="font-serif text-2xl font-normal">
+              Leave the wall?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               Your name stays. You will have to sign in again to paste or burn.
             </AlertDialogDescription>

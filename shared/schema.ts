@@ -97,6 +97,37 @@ export const wallSettings = pgTable("wall_settings", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/** Pending keep requests: deactivate, delete, or reactivate an archived name. */
+export const accountRequests = pgTable("account_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  kind: text("kind").notNull(),
+  status: text("status").notNull().default("pending"),
+  anonymousName: text("anonymous_name").notNull().default(""),
+  authProvider: text("auth_provider").notNull().default(""),
+  authSubject: text("auth_subject").notNull().default(""),
+  email: text("email").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  snapshotJson: text("snapshot_json").notNull().default("{}"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+});
+
+/** Separate vault for deactivated and deleted accounts (not in live users). */
+export const archivedAccounts = pgTable("archived_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  originalUserId: varchar("original_user_id").notNull(),
+  status: text("status").notNull(),
+  anonymousName: text("anonymous_name").notNull().default(""),
+  authProvider: text("auth_provider").notNull().default(""),
+  authSubject: text("auth_subject").notNull().default(""),
+  email: text("email").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  snapshotJson: text("snapshot_json").notNull().default("{}"),
+  requestId: varchar("request_id"),
+  archivedAt: timestamp("archived_at").notNull().defaultNow(),
+});
+
 export function isPlausibleEmail(value: string): boolean {
   const email = value.trim().toLowerCase();
   if (email.length < 6 || email.length > 254) return false;
@@ -142,17 +173,42 @@ export const phoneVerifySchema = z.object({
   code: z.string().regex(/^\d{6}$/, "Enter the six-digit code"),
 });
 
-export const deviceFieldsSchema = z.object({
-  platform: z.string().max(40).optional(),
-  language: z.string().max(40).optional(),
-  timezone: z.string().max(80).optional(),
-  userAgent: z.string().max(512).optional(),
-  screen: z.string().max(40).optional(),
-  brand: z.string().max(40).optional(),
-  model: z.string().max(80).optional(),
-  os: z.string().max(40).optional(),
-  osVersion: z.string().max(40).optional(),
-});
+/** Max length per stored device field — the server keeps only these keys. */
+export const DEVICE_FIELD_LIMITS = {
+  source: 20,
+  platform: 40,
+  language: 40,
+  timezone: 80,
+  userAgent: 512,
+  screen: 40,
+  viewport: 40,
+  pixelRatio: 10,
+  touch: 5,
+  deviceType: 20,
+  brand: 40,
+  model: 80,
+  os: 40,
+  osVersion: 40,
+  browser: 40,
+  browserVersion: 40,
+  architecture: 20,
+  bitness: 10,
+  cpuCores: 10,
+  memoryGb: 10,
+  androidSdk: 10,
+  webViewVersion: 40,
+  emulator: 5,
+  appVersion: 40,
+} as const;
+
+export type DeviceFieldKey = keyof typeof DEVICE_FIELD_LIMITS;
+export type DeviceFields = Partial<Record<DeviceFieldKey, string>>;
+
+export const deviceFieldsSchema = z.object(
+  Object.fromEntries(
+    Object.entries(DEVICE_FIELD_LIMITS).map(([key, max]) => [key, z.string().max(max).optional()]),
+  ) as Record<DeviceFieldKey, z.ZodOptional<z.ZodString>>,
+);
 
 export const guestAuthSchema = z.object({
   guestKey: z.string().min(16).max(128),
@@ -171,6 +227,11 @@ export const guestAuthSchema = z.object({
 
 export const deviceDetailsSchema = z.object({
   device: deviceFieldsSchema,
+});
+
+export const accountRequestKindSchema = z.enum(["deactivate", "delete", "activate"]);
+export const accountRequestSchema = z.object({
+  kind: z.enum(["deactivate", "delete"]),
 });
 
 export const insertPidakaSchema = z.object({
@@ -254,3 +315,7 @@ export type PidakaView = typeof pidakaViews.$inferSelect;
 export type WallSettingsRow = typeof wallSettings.$inferSelect;
 export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
 export type DevicePushTokenRow = typeof devicePushTokens.$inferSelect;
+export type AccountRequestRow = typeof accountRequests.$inferSelect;
+export type ArchivedAccountRow = typeof archivedAccounts.$inferSelect;
+export type AccountRequestKind = z.infer<typeof accountRequestKindSchema>;
+export type AccountArchiveStatus = "deactivated" | "deleted" | "suspended";

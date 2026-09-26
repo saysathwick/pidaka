@@ -8,9 +8,10 @@ export async function initNativeChrome() {
   if (!Capacitor.isNativePlatform()) return;
   document.documentElement.classList.add("native-app");
   try {
+    // Draw under the system bars; CSS --safe-top / --safe-bottom keep chrome clear.
+    await StatusBar.setOverlaysWebView({ overlay: true });
     await StatusBar.setStyle({ style: Style.Dark });
     await StatusBar.setBackgroundColor({ color: "#070709" });
-    await StatusBar.setOverlaysWebView({ overlay: false });
   } catch {
     // status bar API unavailable on this device
   }

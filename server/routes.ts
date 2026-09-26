@@ -19,8 +19,12 @@ import {
   phoneVerifySchema,
   guestAuthSchema,
   deviceDetailsSchema,
+  accountRequestSchema,
   adminSessionSchema,
   wallSettingsPatchSchema,
+  DEVICE_FIELD_LIMITS,
+  type DeviceFieldKey,
+  type DeviceFields,
 } from "@shared/schema";
 import {
   appleAuthUrl,
@@ -41,6 +45,12 @@ import {
   signOAuthState,
 } from "./identity";
 import {
+  gateAuthSignIn,
+  gateEmailSignIn,
+  gateLiveUserSignIn,
+  gatePhoneSignIn,
+} from "./account-gate";
+import {
   adminMiddleware,
   adminSecret,
   hearthUsersMiddleware,
@@ -55,29 +65,14 @@ import { parseNoticeColor, parseNoticeFont, parseNoticeSize, parseNoticeStyle, s
 import { matchModerationKeywords, sanitizeModerationKeywords } from "@shared/moderation";
 import { sanitizeBurnAlertBodyMany, sanitizeBurnAlertBodyOne, sanitizeBurnAlertTitle } from "@shared/burn-alert";
 
-function deviceJsonFromBody(device: {
-  platform?: string;
-  language?: string;
-  timezone?: string;
-  userAgent?: string;
-  screen?: string;
-  brand?: string;
-  model?: string;
-  os?: string;
-  osVersion?: string;
-} | undefined) {
-  return JSON.stringify({
-    platform: device?.platform?.slice(0, 40) || "",
-    language: device?.language?.slice(0, 40) || "",
-    timezone: device?.timezone?.slice(0, 80) || "",
-    userAgent: device?.userAgent?.slice(0, 512) || "",
-    screen: device?.screen?.slice(0, 40) || "",
-    brand: device?.brand?.slice(0, 40) || "",
-    model: device?.model?.slice(0, 80) || "",
-    os: device?.os?.slice(0, 40) || "",
-    osVersion: device?.osVersion?.slice(0, 40) || "",
-    at: new Date().toISOString(),
-  });
+function deviceJsonFromBody(device: DeviceFields | undefined) {
+  const out: Record<string, string> = {};
+  for (const [key, max] of Object.entries(DEVICE_FIELD_LIMITS)) {
+    const value = device?.[key as DeviceFieldKey];
+    out[key] = typeof value === "string" ? value.slice(0, max) : "";
+  }
+  out.at = new Date().toISOString();
+  return JSON.stringify(out);
 }
 import { generateAnonymousName } from "@shared/names";
 import { log } from "./index";
@@ -95,7 +90,7 @@ import {
   setSessionCookie,
 } from "./http-security";
 import { mailDomainLooksReal } from "./mail-domain";
-import { burnAlertsReady, notifyBurnArrived, vapidPublicKey } from "./push";
+import { burnAlertsReady, notifyAccountEvent, notifyBurnArrived, vapidPublicKey } from "./push";
 import { fcmReady } from "./fcm";
 
 if (!process.env.SESSION_SECRET) {
@@ -376,6 +371,131 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/admin/archived-accounts", hearthUsersMiddleware as any, async (_req: AdminRequest, res: Response) => {
+    try {
+      const rows = await storage.listArchivedAccounts();
+      return res.json(
+        rows.map((row) => ({
+          id: row.id,
+          originalUserId: row.originalUserId,
+          status: row.status,
+          anonymousName: row.anonymousName,
+          authProvider: row.authProvider,
+          archivedAt: row.archivedAt.toISOString(),
+        })),
+      );
+    } catch (err) {
+      return serverError(res, "Failed to list archived names", err);
+    }
+  });
+
+  app.post("/api/admin/users/:id/suspend", hearthUsersMiddleware as any, async (req: AdminRequest, res: Response) => {
+    try {
+      const id = pidakaParam(req);
+      if (!id) return res.status(400).json({ message: "Missing user id" });
+      const archived = await storage.suspendUser(id);
+      if (!archived) return res.status(404).json({ message: "That name is gone" });
+      void notifyAccountEvent(id, "account_suspended").catch(() => {});
+      return res.json({
+        ok: true,
+        archived: {
+          id: archived.id,
+          originalUserId: archived.originalUserId,
+          status: archived.status,
+          anonymousName: archived.anonymousName,
+          authProvider: archived.authProvider,
+          archivedAt: archived.archivedAt.toISOString(),
+        },
+      });
+    } catch (err) {
+      return serverError(res, "Could not suspend that name", err);
+    }
+  });
+
+  app.post("/api/admin/archived-accounts/:id/unsuspend", hearthUsersMiddleware as any, async (req: AdminRequest, res: Response) => {
+    try {
+      const id = pidakaParam(req);
+      if (!id) return res.status(400).json({ message: "Missing archive id" });
+      const user = await storage.unsuspendArchived(id);
+      if (!user) return res.status(404).json({ message: "That suspended name is gone" });
+      void notifyAccountEvent(user.id, "account_unsuspended").catch(() => {});
+      return res.json({
+        ok: true,
+        user: {
+          id: user.id,
+          anonymousName: user.anonymousName,
+          authProvider: user.authProvider,
+        },
+      });
+    } catch (err) {
+      return serverError(res, "Could not unsuspend that name", err);
+    }
+  });
+
+  app.get("/api/admin/account-requests", adminMiddleware as any, async (_req: AdminRequest, res: Response) => {
+    try {
+      const rows = await storage.listPendingAccountRequests();
+      return res.json(
+        rows.map((row) => ({
+          id: row.id,
+          userId: row.userId,
+          kind: row.kind,
+          status: row.status,
+          anonymousName: row.anonymousName,
+          authProvider: row.authProvider,
+          createdAt: row.createdAt.toISOString(),
+        })),
+      );
+    } catch (err) {
+      return serverError(res, "Failed to list account requests", err);
+    }
+  });
+
+  app.post("/api/admin/account-requests/:id/approve", adminMiddleware as any, async (req: AdminRequest, res: Response) => {
+    try {
+      const id = pidakaParam(req);
+      if (!id) return res.status(400).json({ message: "Missing request id" });
+      const request = await storage.getAccountRequest(id);
+      if (!request || request.status !== "pending") {
+        return res.status(404).json({ message: "That request is gone" });
+      }
+      if (request.kind === "deactivate") {
+        const result = await storage.approveDeactivateRequest(request.id);
+        if (!result) return res.status(404).json({ message: "That request is gone" });
+        void notifyAccountEvent(request.userId, "account_deactivated").catch(() => {});
+        return res.json({ ok: true, kind: "deactivate" });
+      }
+      if (request.kind === "delete") {
+        // Notify while push tokens still exist, then wipe with delete archive.
+        await notifyAccountEvent(request.userId, "account_deleted").catch(() => {});
+        const result = await storage.approveDeleteRequest(request.id);
+        if (!result) return res.status(404).json({ message: "That request is gone" });
+        return res.json({ ok: true, kind: "delete" });
+      }
+      if (request.kind === "activate") {
+        const result = await storage.approveActivateRequest(request.id);
+        if (!result) return res.status(404).json({ message: "That request is gone" });
+        void notifyAccountEvent(result.user.id, "account_activated").catch(() => {});
+        return res.json({ ok: true, kind: "activate" });
+      }
+      return res.status(400).json({ message: "Unknown request kind" });
+    } catch (err) {
+      return serverError(res, "Could not approve that request", err);
+    }
+  });
+
+  app.post("/api/admin/account-requests/:id/reject", adminMiddleware as any, async (req: AdminRequest, res: Response) => {
+    try {
+      const id = pidakaParam(req);
+      if (!id) return res.status(400).json({ message: "Missing request id" });
+      const row = await storage.rejectAccountRequest(id);
+      if (!row) return res.status(404).json({ message: "That request is gone" });
+      return res.json({ ok: true });
+    } catch (err) {
+      return serverError(res, "Could not reject that request", err);
+    }
+  });
+
   app.post("/api/auth/register", limitAuth, async (req: Request, res: Response) => {
     try {
       const wall = await readPublicWall();
@@ -396,6 +516,12 @@ export async function registerRoutes(
       if (!(await mailDomainLooksReal(domain))) {
         return res.status(400).json({ message: "Enter a real email address" });
       }
+
+      const archivedGate = await gateEmailSignIn(email);
+      if (archivedGate) {
+        return res.status(archivedGate.status).json({ message: archivedGate.message });
+      }
+
       const { password } = parsed.data;
       const existing = await storage.getUserByEmail(email);
       if (existing) {
@@ -442,10 +568,21 @@ export async function registerRoutes(
 
       const email = parsed.data.email.toLowerCase();
       const { password } = parsed.data;
+
+      const archivedGate = await gateEmailSignIn(email);
+      if (archivedGate) {
+        return res.status(archivedGate.status).json({ message: archivedGate.message });
+      }
+
       const user = await storage.getUserByEmail(email);
       const valid = await bcrypt.compare(password, user?.password || DUMMY_PASSWORD_HASH);
       if (!user || !user.password || !valid) {
         return res.status(401).json({ message: "Invalid email or password" });
+      }
+
+      const pendingGate = await gateLiveUserSignIn(user.id);
+      if (pendingGate) {
+        return res.status(403).json({ message: pendingGate });
       }
 
       const token = issueSession(res, user.id);
@@ -496,8 +633,17 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Location is needed for a guest name" });
       }
 
+      const archivedGate = await gateAuthSignIn("guest", parsed.data.guestKey);
+      if (archivedGate) {
+        return res.status(archivedGate.status).json({ message: archivedGate.message });
+      }
+
       const existing = await storage.getUserByAuth("guest", parsed.data.guestKey);
       if (existing) {
+        const pendingGate = await gateLiveUserSignIn(existing.id);
+        if (pendingGate) {
+          return res.status(403).json({ message: pendingGate });
+        }
         await storage.updateGuestProvenance(existing.id, { saidOrigin, locationJson, deviceJson });
         const token = issueSession(res, existing.id);
         return res.json({
@@ -625,6 +771,10 @@ export async function registerRoutes(
         email: profile.email,
         allowCreate: settings.registrationsOpen,
       });
+      const pendingGate = await gateLiveUserSignIn(user.id);
+      if (pendingGate) {
+        return oauthErrorRedirect(res, origin, "google", oauthState.client);
+      }
       return finishRedirect(res, origin, signAppToken(user.id), created, oauthState.client);
     } catch {
       return oauthErrorRedirect(res, origin, "google", oauthState.client);
@@ -675,6 +825,10 @@ export async function registerRoutes(
         email: profile.email,
         allowCreate: settings.registrationsOpen,
       });
+      const pendingGate = await gateLiveUserSignIn(user.id);
+      if (pendingGate) {
+        return oauthErrorRedirect(res, origin, "apple", oauthState.client);
+      }
       return finishRedirect(res, origin, signAppToken(user.id), created, oauthState.client);
     } catch {
       return oauthErrorRedirect(res, origin, "apple", oauthState.client);
@@ -733,6 +887,10 @@ export async function registerRoutes(
         phone,
         allowCreate: settings.registrationsOpen,
       });
+      const pendingGate = await gateLiveUserSignIn(user.id);
+      if (pendingGate) {
+        return res.status(403).json({ message: pendingGate });
+      }
       const token = issueSession(res, user.id);
       return res.json({
         token,
@@ -745,6 +903,9 @@ export async function registerRoutes(
       });
     } catch (err: any) {
       const message = err?.message || "Phone sign-in failed";
+      if (err?.code === "ACCOUNT_ARCHIVED" || err?.status === 403) {
+        return res.status(403).json({ message });
+      }
       if (typeof message === "string" && message.includes("taking names")) {
         return res.status(403).json({ message });
       }
@@ -755,6 +916,31 @@ export async function registerRoutes(
   app.post("/api/auth/logout", (_req: Request, res: Response) => {
     clearSessionCookie(res);
     return res.json({ ok: true });
+  });
+
+  app.post("/api/account/request", authMiddleware as any, async (req: AuthRequest, res: Response) => {
+    try {
+      const parsed = accountRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0].message });
+      }
+      const request = await storage.createAccountRequest(req.userId!, parsed.data.kind);
+      void notifyAccountEvent(
+        req.userId!,
+        parsed.data.kind === "delete" ? "account_request_delete" : "account_request_deactivate",
+      ).catch(() => {});
+      clearSessionCookie(res);
+      return res.json({
+        ok: true,
+        kind: request.kind,
+        message:
+          request.kind === "delete"
+            ? "Your account will be permanently deleted. You are signed out."
+            : "Your account will be archived. You are signed out.",
+      });
+    } catch (err) {
+      return serverError(res, "Could not send that request", err);
+    }
   });
 
   app.post("/api/auth/device", authMiddleware as any, async (req: AuthRequest, res: Response) => {

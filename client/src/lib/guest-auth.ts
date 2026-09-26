@@ -18,50 +18,9 @@ export function guestKey() {
   return next;
 }
 
-export function readDeviceDetails() {
-  const nav = typeof navigator !== "undefined" ? navigator : undefined;
-  const screenSize =
-    typeof window !== "undefined" ? `${window.screen?.width ?? 0}x${window.screen?.height ?? 0}` : "";
-  return {
-    platform: nav?.platform || "",
-    language: nav?.language || "",
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
-    userAgent: (nav?.userAgent || "").slice(0, 512),
-    screen: screenSize,
-  };
-}
+import { collectDeviceDetails, type DeviceDetails } from "@/lib/device-details";
 
-export type DeviceDetails = {
-  platform: string;
-  language: string;
-  timezone: string;
-  userAgent: string;
-  screen: string;
-  brand?: string;
-  model?: string;
-  os?: string;
-  osVersion?: string;
-};
-
-/** Sync browser/OS basics; on native apps also brand + model via Capacitor Device. */
-export async function collectDeviceDetails(): Promise<DeviceDetails> {
-  const base: DeviceDetails = readDeviceDetails();
-  if (!Capacitor.isNativePlatform()) return base;
-  try {
-    const { Device } = await import("@capacitor/device");
-    const info = await Device.getInfo();
-    return {
-      ...base,
-      platform: info.platform || base.platform,
-      brand: String(info.manufacturer || "").slice(0, 40),
-      model: String(info.model || "").slice(0, 80),
-      os: String(info.operatingSystem || "").slice(0, 40),
-      osVersion: String(info.osVersion || "").slice(0, 40),
-    };
-  } catch {
-    return base;
-  }
-}
+export { collectDeviceDetails, readDeviceDetails, type DeviceDetails } from "@/lib/device-details";
 
 const DEVICE_STASH_KEY = "pidaka_pending_device";
 

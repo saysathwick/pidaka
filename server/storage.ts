@@ -1,4 +1,4 @@
-import { eq, desc, lt, sql, and, inArray } from "drizzle-orm";
+import { eq, desc, lt, sql, and, inArray, or } from "drizzle-orm";
 import { db, isDemoMode } from "./db";
 import { DemoStorage } from "./demo-storage";
 import { excerptPidaka } from "@shared/names";
@@ -11,10 +11,16 @@ import {
   pushSubscriptions,
   devicePushTokens,
   wallSettings,
+  accountRequests,
+  archivedAccounts,
   type User,
   type InsertUser,
   type Pidaka,
   type Burn,
+  type AccountRequestRow,
+  type ArchivedAccountRow,
+  type AccountRequestKind,
+  type AccountArchiveStatus,
 } from "@shared/schema";
 import { parseNoticeColor, parseNoticeFont, parseNoticeLinks, parseNoticeSize, parseNoticeStyle, WALL_SETTINGS_ID, type PidakaStatus, type WallSettings } from "@shared/wall";
 import { parseModerationKeywords, sanitizeModerationKeywords } from "@shared/moderation";
@@ -88,6 +94,22 @@ export interface IStorage {
     deviceJson?: string;
     createdAt: Date;
   }>>;
+
+  createAccountRequest(userId: string, kind: "deactivate" | "delete"): Promise<AccountRequestRow>;
+  createActivateRequest(archived: ArchivedAccountRow): Promise<AccountRequestRow>;
+  getPendingAccountRequestForUser(userId: string): Promise<AccountRequestRow | undefined>;
+  listPendingAccountRequests(): Promise<AccountRequestRow[]>;
+  getAccountRequest(id: string): Promise<AccountRequestRow | undefined>;
+  rejectAccountRequest(id: string): Promise<AccountRequestRow | undefined>;
+  approveDeactivateRequest(id: string): Promise<{ request: AccountRequestRow; archived: ArchivedAccountRow } | undefined>;
+  approveDeleteRequest(id: string): Promise<{ request: AccountRequestRow; archived: ArchivedAccountRow } | undefined>;
+  approveActivateRequest(id: string): Promise<{ request: AccountRequestRow; user: User } | undefined>;
+  suspendUser(userId: string): Promise<ArchivedAccountRow | undefined>;
+  unsuspendArchived(archivedId: string): Promise<User | undefined>;
+  findArchivedByAuth(provider: string, subject: string): Promise<ArchivedAccountRow | undefined>;
+  findArchivedByEmail(email: string): Promise<ArchivedAccountRow | undefined>;
+  findArchivedByPhone(phone: string): Promise<ArchivedAccountRow | undefined>;
+  listArchivedAccounts(): Promise<ArchivedAccountRow[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -493,6 +515,295 @@ export class DatabaseStorage implements IStorage {
         createdAt: revealed.createdAt,
       };
     });
+  }
+
+  async createAccountRequest(userId: string, kind: "deactivate" | "delete") {
+    const pending = await this.getPendingAccountRequestForUser(userId);
+    if (pending) return pending;
+
+    const [raw] = await db.select().from(users).where(eq(users.id, userId));
+    if (!raw) throw new Error("User not found");
+    const revealed = revealUser(raw);
+    const [row] = await db
+      .insert(accountRequests)
+      .values({
+        userId,
+        kind,
+        status: "pending",
+        anonymousName: revealed.anonymousName,
+        authProvider: raw.authProvider,
+        authSubject: raw.authSubject || "",
+        email: raw.email,
+        phone: raw.phone || "",
+        snapshotJson: JSON.stringify(raw),
+      })
+      .returning();
+    return row;
+  }
+
+  async createActivateRequest(archived: ArchivedAccountRow) {
+    const existing = await db
+      .select()
+      .from(accountRequests)
+      .where(
+        and(
+          eq(accountRequests.userId, archived.originalUserId),
+          eq(accountRequests.kind, "activate"),
+          eq(accountRequests.status, "pending"),
+        ),
+      )
+      .limit(1);
+    if (existing[0]) return existing[0];
+
+    const [row] = await db
+      .insert(accountRequests)
+      .values({
+        userId: archived.originalUserId,
+        kind: "activate",
+        status: "pending",
+        anonymousName: archived.anonymousName,
+        authProvider: archived.authProvider,
+        authSubject: archived.authSubject,
+        email: archived.email,
+        phone: archived.phone || "",
+        snapshotJson: archived.snapshotJson,
+      })
+      .returning();
+    return row;
+  }
+
+  async getPendingAccountRequestForUser(userId: string) {
+    const [row] = await db
+      .select()
+      .from(accountRequests)
+      .where(and(eq(accountRequests.userId, userId), eq(accountRequests.status, "pending")))
+      .limit(1);
+    return row;
+  }
+
+  async listPendingAccountRequests() {
+    return db
+      .select()
+      .from(accountRequests)
+      .where(eq(accountRequests.status, "pending"))
+      .orderBy(desc(accountRequests.createdAt))
+      .limit(200);
+  }
+
+  async getAccountRequest(id: string) {
+    const [row] = await db.select().from(accountRequests).where(eq(accountRequests.id, id));
+    return row;
+  }
+
+  async rejectAccountRequest(id: string) {
+    const [row] = await db
+      .update(accountRequests)
+      .set({ status: "rejected", resolvedAt: new Date() })
+      .where(and(eq(accountRequests.id, id), eq(accountRequests.status, "pending")))
+      .returning();
+    return row;
+  }
+
+  private async archiveFromRequest(request: AccountRequestRow, status: AccountArchiveStatus) {
+    const archived = await this.moveUserToArchive(request.userId, status, request.id, request.snapshotJson);
+    if (!archived) return undefined;
+
+    const [updated] = await db
+      .update(accountRequests)
+      .set({ status: "approved", resolvedAt: new Date() })
+      .where(eq(accountRequests.id, request.id))
+      .returning();
+
+    return { request: updated, archived };
+  }
+
+  private async moveUserToArchive(
+    userId: string,
+    status: AccountArchiveStatus,
+    requestId?: string | null,
+    snapshotJson?: string,
+  ): Promise<ArchivedAccountRow | undefined> {
+    let snap: User;
+    let anonymousName = "";
+    let authProvider = "";
+    let authSubject = "";
+    let email = "";
+    let phone = "";
+
+    if (snapshotJson) {
+      try {
+        snap = JSON.parse(snapshotJson) as User;
+      } catch {
+        throw new Error("Broken account snapshot");
+      }
+      anonymousName = snap.anonymousName;
+      authProvider = snap.authProvider;
+      authSubject = snap.authSubject || "";
+      email = snap.email;
+      phone = snap.phone || "";
+    } else {
+      const [raw] = await db.select().from(users).where(eq(users.id, userId));
+      if (!raw) return undefined;
+      snap = raw;
+      const revealed = revealUser(raw);
+      anonymousName = revealed.anonymousName;
+      authProvider = raw.authProvider;
+      authSubject = raw.authSubject || "";
+      email = raw.email;
+      phone = raw.phone || "";
+      snapshotJson = JSON.stringify(raw);
+    }
+
+    if (status === "deleted") {
+      const owned = await db.select({ id: pidakas.id }).from(pidakas).where(eq(pidakas.creatorUserId, userId));
+      const ids = owned.map((row) => row.id);
+      if (ids.length) {
+        await db.delete(burns).where(inArray(burns.pidakaId, ids));
+        await db.delete(pidakaViews).where(inArray(pidakaViews.pidakaId, ids));
+        await db.delete(pidakas).where(inArray(pidakas.id, ids));
+      }
+      await db.delete(burns).where(
+        or(eq(burns.senderUserId, userId), eq(burns.receiverUserId, userId)),
+      );
+      await db.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+      await db.delete(devicePushTokens).where(eq(devicePushTokens.userId, userId));
+    }
+
+    await db
+      .update(accountRequests)
+      .set({ status: "rejected", resolvedAt: new Date() })
+      .where(and(eq(accountRequests.userId, userId), eq(accountRequests.status, "pending")));
+
+    await db.delete(users).where(eq(users.id, userId));
+
+    const [archived] = await db
+      .insert(archivedAccounts)
+      .values({
+        originalUserId: userId,
+        status,
+        anonymousName,
+        authProvider,
+        authSubject,
+        email,
+        phone,
+        snapshotJson: snapshotJson!,
+        requestId: requestId ?? null,
+      })
+      .returning();
+
+    return archived;
+  }
+
+  async approveDeactivateRequest(id: string) {
+    const request = await this.getAccountRequest(id);
+    if (!request || request.status !== "pending" || request.kind !== "deactivate") return undefined;
+    return this.archiveFromRequest(request, "deactivated");
+  }
+
+  async approveDeleteRequest(id: string) {
+    const request = await this.getAccountRequest(id);
+    if (!request || request.status !== "pending" || request.kind !== "delete") return undefined;
+    return this.archiveFromRequest(request, "deleted");
+  }
+
+  private async restoreArchivedRow(archived: ArchivedAccountRow): Promise<User | undefined> {
+    let snap: User;
+    try {
+      snap = JSON.parse(archived.snapshotJson) as User;
+    } catch {
+      throw new Error("Broken account snapshot");
+    }
+
+    const [user] = await db
+      .insert(users)
+      .values({
+        id: snap.id,
+        email: snap.email,
+        emailEnc: snap.emailEnc,
+        password: snap.password,
+        phone: snap.phone,
+        phoneEnc: snap.phoneEnc,
+        authProvider: snap.authProvider,
+        authSubject: snap.authSubject,
+        anonymousName: snap.anonymousName,
+        saidOrigin: snap.saidOrigin || "",
+        locationJson: snap.locationJson || "",
+        deviceJson: snap.deviceJson || "",
+        burnsSentCount: snap.burnsSentCount || 0,
+        burnsReceivedCount: snap.burnsReceivedCount || 0,
+        createdAt: snap.createdAt ? new Date(snap.createdAt) : new Date(),
+      })
+      .returning();
+
+    await db.delete(archivedAccounts).where(eq(archivedAccounts.id, archived.id));
+    return revealUser(user);
+  }
+
+  async approveActivateRequest(id: string) {
+    const request = await this.getAccountRequest(id);
+    if (!request || request.status !== "pending" || request.kind !== "activate") return undefined;
+
+    const [archived] = await db
+      .select()
+      .from(archivedAccounts)
+      .where(and(eq(archivedAccounts.originalUserId, request.userId), eq(archivedAccounts.status, "deactivated")))
+      .limit(1);
+    if (!archived) return undefined;
+
+    const user = await this.restoreArchivedRow(archived);
+    if (!user) return undefined;
+
+    const [updated] = await db
+      .update(accountRequests)
+      .set({ status: "approved", resolvedAt: new Date() })
+      .where(eq(accountRequests.id, request.id))
+      .returning();
+
+    return { request: updated, user };
+  }
+
+  async suspendUser(userId: string) {
+    return this.moveUserToArchive(userId, "suspended");
+  }
+
+  async unsuspendArchived(archivedId: string) {
+    const [archived] = await db
+      .select()
+      .from(archivedAccounts)
+      .where(and(eq(archivedAccounts.id, archivedId), eq(archivedAccounts.status, "suspended")))
+      .limit(1);
+    if (!archived) return undefined;
+    return this.restoreArchivedRow(archived);
+  }
+
+  async findArchivedByAuth(provider: string, subject: string) {
+    const [row] = await db
+      .select()
+      .from(archivedAccounts)
+      .where(and(eq(archivedAccounts.authProvider, provider), eq(archivedAccounts.authSubject, subject)))
+      .orderBy(desc(archivedAccounts.archivedAt))
+      .limit(1);
+    return row;
+  }
+
+  async findArchivedByEmail(email: string) {
+    const hashed = blind(email.toLowerCase());
+    const [byHash] = await db.select().from(archivedAccounts).where(eq(archivedAccounts.email, hashed)).limit(1);
+    if (byHash) return byHash;
+    const [byPlain] = await db.select().from(archivedAccounts).where(eq(archivedAccounts.email, email.toLowerCase())).limit(1);
+    return byPlain;
+  }
+
+  async findArchivedByPhone(phone: string) {
+    const hashed = blind(phone);
+    const [byHash] = await db.select().from(archivedAccounts).where(eq(archivedAccounts.phone, hashed)).limit(1);
+    if (byHash) return byHash;
+    const [byPlain] = await db.select().from(archivedAccounts).where(eq(archivedAccounts.phone, phone)).limit(1);
+    return byPlain;
+  }
+
+  async listArchivedAccounts() {
+    return db.select().from(archivedAccounts).orderBy(desc(archivedAccounts.archivedAt)).limit(200);
   }
 }
 

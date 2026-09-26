@@ -1,6 +1,7 @@
 import { cert, getApps, initializeApp, type ServiceAccount } from "firebase-admin/app";
 import { getMessaging, type Messaging } from "firebase-admin/messaging";
 import type { BurnAlertPayload } from "@shared/burn-alert";
+import type { AccountAlertPayload } from "@shared/account-alert";
 import { storage } from "./storage";
 
 function loadServiceAccount() {
@@ -38,7 +39,14 @@ const INVALID_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
 ]);
 
-export async function notifyBurnViaFcm(userId: string, alert: BurnAlertPayload) {
+type PushAlert = {
+  kind: string;
+  title: string;
+  body: string;
+  n?: number;
+};
+
+async function notifyViaFcm(userId: string, alert: PushAlert) {
   if (!messaging) return;
   const tokens = await storage.listDevicePushTokens(userId);
   if (tokens.length === 0) return;
@@ -48,7 +56,7 @@ export async function notifyBurnViaFcm(userId: string, alert: BurnAlertPayload) 
     notification: { title: alert.title, body: alert.body },
     data: {
       kind: alert.kind,
-      n: String(alert.n),
+      n: String(alert.n ?? 0),
       title: alert.title,
       body: alert.body,
     },
@@ -64,4 +72,21 @@ export async function notifyBurnViaFcm(userId: string, alert: BurnAlertPayload) 
       }
     }),
   );
+}
+
+export async function notifyBurnViaFcm(userId: string, alert: BurnAlertPayload) {
+  await notifyViaFcm(userId, {
+    kind: alert.kind,
+    title: alert.title,
+    body: alert.body,
+    n: alert.n,
+  });
+}
+
+export async function notifyAccountViaFcm(userId: string, alert: AccountAlertPayload) {
+  await notifyViaFcm(userId, {
+    kind: alert.kind,
+    title: alert.title,
+    body: alert.body,
+  });
 }

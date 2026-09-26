@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,8 @@ import { useTheme } from "@/lib/theme";
 import { Moon, Sun } from "lucide-react";
 import { clearHearthUsersToken, hearthUsersRequest } from "@/lib/hearth-users";
 import { isHearthApp } from "@/lib/app-mode";
-import type { AdminUser } from "@shared/wall";
+import { parseDeviceJson, summarizeDevice } from "@/lib/device-details";
+import type { AdminArchivedAccount, AdminUser } from "@shared/wall";
 
 type DoorKey = "google" | "apple" | "phone" | "email" | "guest" | "other";
 
@@ -54,9 +55,57 @@ function matchesQuery(user: AdminUser, query: string) {
   return userHaystack(user).includes(q);
 }
 
-function UserRow({ user }: { user: AdminUser }) {
+function DeviceLine({ raw }: { raw: string }) {
+  const device = parseDeviceJson(raw);
+  const summary = device ? summarizeDevice(device) : "";
+  const lookup = device?.model && device.model.length > 3 && !/^(iPhone|iPad|Mac)$/.test(device.model)
+    ? `https://www.google.com/search?q=${encodeURIComponent([device.brand, device.model].filter(Boolean).join(" "))}`
+    : "";
   return (
-    <li className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-baseline sm:justify-between">
+    <details className="mt-0.5 text-[10px] text-muted-foreground/80">
+      <summary className="cursor-pointer select-none">
+        Device: <span className="text-foreground/80">{summary || "Unknown"}</span>
+        {lookup ? (
+          <a
+            href={lookup}
+            target="_blank"
+            rel="noreferrer"
+            className="ml-1.5 underline underline-offset-2 hover:text-foreground"
+            onClick={(e) => e.stopPropagation()}
+          >
+            look up
+          </a>
+        ) : null}
+      </summary>
+      {device ? (
+        <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 break-all">
+          {Object.entries(device)
+            .filter(([, value]) => value !== "" && value != null)
+            .map(([key, value]) => (
+              <Fragment key={key}>
+                <dt className="uppercase tracking-[0.12em]">{key}</dt>
+                <dd className="text-foreground/70">{String(value)}</dd>
+              </Fragment>
+            ))}
+        </dl>
+      ) : (
+        <p className="mt-1 break-all">{raw}</p>
+      )}
+    </details>
+  );
+}
+
+function UserRow({
+  user,
+  busy,
+  onSuspend,
+}: {
+  user: AdminUser;
+  busy: boolean;
+  onSuspend: (user: AdminUser) => void;
+}) {
+  return (
+    <li className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="font-serif">{user.anonymousName}</p>
         {user.saidOrigin ? (
@@ -67,15 +116,22 @@ function UserRow({ user }: { user: AdminUser }) {
             Place: {user.locationJson}
           </p>
         ) : null}
-        {user.deviceJson ? (
-          <p className="mt-0.5 break-all text-[10px] text-muted-foreground/80">
-            Device: {user.deviceJson}
-          </p>
-        ) : null}
+        {user.deviceJson ? <DeviceLine raw={user.deviceJson} /> : null}
+        <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+          {user.authProvider} · {user.email}
+        </p>
       </div>
-      <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-        {user.authProvider} · {user.email}
-      </p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="shrink-0"
+        disabled={busy}
+        onClick={() => onSuspend(user)}
+        data-testid={`button-suspend-${user.id}`}
+      >
+        Suspend
+      </Button>
     </li>
   );
 }
@@ -85,11 +141,15 @@ function DoorSection({
   users,
   query,
   onQueryChange,
+  busyId,
+  onSuspend,
 }: {
   label: string;
   users: AdminUser[];
   query: string;
   onQueryChange: (value: string) => void;
+  busyId: string | null;
+  onSuspend: (user: AdminUser) => void;
 }) {
   const filtered = useMemo(
     () => users.filter((user) => matchesQuery(user, query)),
@@ -121,7 +181,12 @@ function DoorSection({
       ) : (
         <ul className="flex flex-col divide-y divide-border/70 rounded-xl border border-border bg-card/60">
           {filtered.map((user) => (
-            <UserRow key={user.id} user={user} />
+            <UserRow
+              key={user.id}
+              user={user}
+              busy={busyId === user.id}
+              onSuspend={onSuspend}
+            />
           ))}
         </ul>
       )}
@@ -136,10 +201,12 @@ export default function HearthUsersPage() {
   const [secret, setSecret] = useState("");
   const [open, setOpen] = useState(false);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [archived, setArchived] = useState<AdminArchivedAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [suspendTarget, setSuspendTarget] = useState<AdminUser | null>(null);
   const [globalQuery, setGlobalQuery] = useState("");
   const [doorQueries, setDoorQueries] = useState<Record<DoorKey, string>>({
     google: "",
@@ -153,14 +220,19 @@ export default function HearthUsersPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const rows = (await hearthUsersRequest("GET", "/api/admin/users")) as AdminUser[];
+      const [rows, archivedRows] = await Promise.all([
+        hearthUsersRequest("GET", "/api/admin/users") as Promise<AdminUser[]>,
+        hearthUsersRequest("GET", "/api/admin/archived-accounts") as Promise<AdminArchivedAccount[]>,
+      ]);
       setUsers(rows);
+      setArchived(archivedRows);
       setOpen(true);
     } catch (err) {
       const status = (err as Error & { status?: number }).status;
       if (status === 401 || status === 403) {
         setOpen(false);
         setUsers([]);
+        setArchived([]);
       } else {
         toast({
           variant: "destructive",
@@ -208,10 +280,52 @@ export default function HearthUsersPage() {
     }
     setOpen(false);
     setUsers([]);
+    setArchived([]);
     setGlobalQuery("");
     setDoorQueries({ google: "", apple: "", phone: "", email: "", guest: "", other: "" });
     setLeaving(false);
     setLeaveOpen(false);
+  };
+
+  const confirmSuspend = async () => {
+    if (!suspendTarget) return;
+    const target = suspendTarget;
+    setBusy(target.id);
+    try {
+      const result = (await hearthUsersRequest("POST", `/api/admin/users/${target.id}/suspend`)) as {
+        archived: AdminArchivedAccount;
+      };
+      setUsers((prev) => prev.filter((row) => row.id !== target.id));
+      setArchived((prev) => [result.archived, ...prev]);
+      setSuspendTarget(null);
+      toast({ title: "Suspended", description: `${target.anonymousName} moved to the archive.` });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Could not suspend",
+        description: err instanceof Error ? err.message : "Try again.",
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const unsuspend = async (row: AdminArchivedAccount) => {
+    setBusy(row.id);
+    try {
+      await hearthUsersRequest("POST", `/api/admin/archived-accounts/${row.id}/unsuspend`);
+      setArchived((prev) => prev.filter((item) => item.id !== row.id));
+      await load();
+      toast({ title: "Unsuspended", description: `${row.anonymousName} is live again.` });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Could not unsuspend",
+        description: err instanceof Error ? err.message : "Try again.",
+      });
+    } finally {
+      setBusy(null);
+    }
   };
 
   const backToHearth = () => {
@@ -375,12 +489,87 @@ export default function HearthUsersPage() {
                   onQueryChange={(value) =>
                     setDoorQueries((prev) => ({ ...prev, [door.key]: value }))
                   }
+                  busyId={busy}
+                  onSuspend={setSuspendTarget}
                 />
               ))
             )}
+
+            <section className="flex flex-col gap-3">
+              <div>
+                <h2 className="font-serif text-2xl">Archive</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Suspended, deactivated, and deleted names kept off the live wall.
+                </p>
+              </div>
+              {archived.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Archive is empty.</p>
+              ) : (
+                <ul className="divide-y divide-border/60 rounded-xl border border-border bg-card/40">
+                  {archived.map((row) => (
+                    <li
+                      key={row.id}
+                      className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="font-serif">{row.anonymousName}</p>
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                          {row.status} · {row.authProvider}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">{row.archivedAt}</p>
+                      </div>
+                      {row.status === "suspended" ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="shrink-0"
+                          disabled={busy === row.id}
+                          onClick={() => void unsuspend(row)}
+                          data-testid={`button-unsuspend-${row.id}`}
+                        >
+                          Unsuspend
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           </div>
         )}
       </main>
+
+      <AlertDialog
+        open={Boolean(suspendTarget)}
+        onOpenChange={(open) => {
+          if (busy) return;
+          if (!open) setSuspendTarget(null);
+        }}
+      >
+        <AlertDialogContent className="max-w-sm rounded-xl border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-serif text-2xl font-normal">
+              Suspend {suspendTarget?.anonymousName}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              They cannot sign in until a keeper unsuspends them. The name moves to the archive.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button
+              variant="ghost"
+              disabled={Boolean(busy)}
+              onClick={() => setSuspendTarget(null)}
+            >
+              Keep
+            </Button>
+            <Button disabled={Boolean(busy)} onClick={() => void confirmSuspend()}>
+              {busy ? "Suspending..." : "Suspend"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -69,10 +69,14 @@ export function PrivacyCopy() {
           <li>
             <span className="font-medium text-foreground">Device.</span> When you
             take a name (guest, Google, Apple, or other doors that send it), we may
-            store coarse device details: platform, language, timezone, screen size,
-            user agent, and on the Android or iOS app the device brand, model, and
-            OS version. This helps stop abuse and keep the wall. It is not a public
-            profile.
+            store coarse device details: platform, language, timezone, screen and
+            window size, whether the screen is touch, browser name and version,
+            operating system and version, processor cores and approximate memory
+            where the browser reports them, and the user agent. On a phone browser
+            that reports it, and always on the Android or iOS app, we also store
+            the device brand and model; the app adds its own version, the system
+            WebView version, and whether it is running on an emulator. This helps
+            stop abuse and keep the wall. It is not a public profile.
           </li>
           <li>
             <span className="font-medium text-foreground">Wall.</span> The text of
@@ -324,11 +328,14 @@ export function DeleteAccountCopy() {
   const mail = `mailto:${OPERATOR.email}?subject=${encodeURIComponent("Pidaka account deletion request")}`;
   return (
     <>
-      <LegalSection title="How to request deletion">
+      <LegalSection title="How to delete">
         <p>
-          To delete your Pidaka account and the data tied to it, email us from the
-          address or phone you used to sign in (or include your anonymous name if
-          you only used guest).
+          Sign in, open the menu, and choose Delete account. Your account will be
+          permanently deleted once the keepers approve the request.
+        </p>
+        <p>
+          You can also email us from the address or phone you used to sign in (or
+          include your anonymous name if you only used guest):
         </p>
         <p>
           <a className="underline underline-offset-4" href={mail}>
@@ -341,11 +348,19 @@ export function DeleteAccountCopy() {
         </p>
       </LegalSection>
 
+      <LegalSection title="Deactivate">
+        <p>
+          From the same menu you can request deactivate. Your account is archived
+          instead of wiped. Sign in again later to ask the keepers to reactivate it.
+        </p>
+      </LegalSection>
+
       <LegalSection title="What we remove">
         <p>
           Your account, anonymous name, sign-in details, guest provenance we
           stored, push tokens for your devices, and pidakas still tied to your
-          account. Burns attached to those pidakas go with them.
+          account when delete is approved. Burns attached to those pidakas go with
+          them.
         </p>
       </LegalSection>
 

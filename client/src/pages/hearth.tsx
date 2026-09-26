@@ -28,6 +28,7 @@ import { isHearthApp } from "@/lib/app-mode";
 import { WallNotice } from "@/components/wall-notice";
 import { fireEmberBurst } from "@/lib/ember-burst";
 import type {
+  AdminAccountRequest,
   AdminPidaka,
   AdminStats,
   NoticeColor,
@@ -83,6 +84,7 @@ export default function HearthPage() {
   const [open, setOpen] = useState(false);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [pidakas, setPidakas] = useState<AdminPidaka[]>([]);
+  const [accountRequests, setAccountRequests] = useState<AdminAccountRequest[]>([]);
   const namesTapCount = useRef(0);
   const namesTapTimer = useRef<number | null>(null);
   const [notice, setNotice] = useState("");
@@ -106,9 +108,10 @@ export default function HearthPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [nextOverview, nextPidakas] = await Promise.all([
+      const [nextOverview, nextPidakas, nextRequests] = await Promise.all([
         hearthRequest("GET", "/api/admin/overview") as Promise<Overview>,
         hearthRequest("GET", "/api/admin/pidakas") as Promise<AdminPidaka[]>,
+        hearthRequest("GET", "/api/admin/account-requests") as Promise<AdminAccountRequest[]>,
       ]);
       setOverview(nextOverview);
       setNotice(nextOverview.settings.notice);
@@ -123,6 +126,7 @@ export default function HearthPage() {
       setBurnAlertBodyMany(nextOverview.settings.burnAlertBodyMany ?? defaultBurnAlertTemplate().burnAlertBodyMany);
       setKeywordsDraft((nextOverview.settings.moderationKeywords ?? []).join("\n"));
       setPidakas(nextPidakas);
+      setAccountRequests(nextRequests);
       setOpen(true);
     } catch (err) {
       const status = (err as Error & { status?: number }).status;
@@ -274,6 +278,47 @@ export default function HearthPage() {
     }
   };
 
+  const approveAccountRequest = async (id: string, kind: AdminAccountRequest["kind"]) => {
+    setBusy(id);
+    try {
+      await hearthRequest("POST", `/api/admin/account-requests/${id}/approve`);
+      setAccountRequests((prev) => prev.filter((row) => row.id !== id));
+      toast({
+        title:
+          kind === "delete"
+            ? "Deleted to archive"
+            : kind === "deactivate"
+              ? "Deactivated to archive"
+              : "Reactivated",
+      });
+    } catch (err) {
+      toast({
+        title: "Could not approve",
+        description: err instanceof Error ? err.message : "Try again",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const rejectAccountRequest = async (id: string) => {
+    setBusy(id);
+    try {
+      await hearthRequest("POST", `/api/admin/account-requests/${id}/reject`);
+      setAccountRequests((prev) => prev.filter((row) => row.id !== id));
+      toast({ title: "Request dismissed" });
+    } catch (err) {
+      toast({
+        title: "Could not reject",
+        description: err instanceof Error ? err.message : "Try again",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const leave = async () => {
     setLeaving(true);
     clearHearthToken();
@@ -288,6 +333,7 @@ export default function HearthPage() {
     setOpen(false);
     setOverview(null);
     setPidakas([]);
+    setAccountRequests([]);
     setLeaving(false);
     setLeaveOpen(false);
   };
@@ -822,6 +868,58 @@ export default function HearthPage() {
                   {busy === "notice" ? "Keeping..." : noticeKept ? "Kept." : "Keep the notice"}
                 </Button>
               </form>
+            </section>
+
+            <section className="flex flex-col gap-4">
+              <div>
+                <h2 className="font-serif text-2xl">Account requests</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Deactivate, delete, and reactivate. Approved names move to the archive vault.
+                </p>
+              </div>
+              {accountRequests.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nothing waiting.</p>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {accountRequests.map((row) => (
+                    <li
+                      key={row.id}
+                      className="flex flex-col gap-3 rounded-xl border border-border bg-card/60 p-4 sm:flex-row sm:items-start sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-serif text-lg">{row.anonymousName}</p>
+                        <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          {row.kind} · {row.authProvider}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={busy === row.id}
+                          onClick={() => void approveAccountRequest(row.id, row.kind)}
+                          data-testid={`button-account-approve-${row.id}`}
+                        >
+                          {row.kind === "activate"
+                            ? "Activate"
+                            : row.kind === "delete"
+                              ? "Delete"
+                              : "Deactivate"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busy === row.id}
+                          onClick={() => void rejectAccountRequest(row.id)}
+                          data-testid={`button-account-reject-${row.id}`}
+                        >
+                          Dismiss
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
 
             <section className="flex flex-col gap-4">

@@ -687,7 +687,7 @@ export function AuthDialog() {
 
 export default function AuthPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 wall-atmosphere">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4 pt-[var(--safe-top)] pb-[var(--safe-bottom)] wall-atmosphere">
       <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-2xl">
         <AuthForm />
       </div>

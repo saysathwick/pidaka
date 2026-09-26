@@ -85,7 +85,7 @@ export default function InboxPage() {
 
   return (
     <SiteShell place="burns" fetching={isFetching && !isLoading}>
-      <main className="max-w-2xl mx-auto px-4 py-5 flex flex-col gap-6">
+      <main className="max-w-2xl mx-auto px-4 py-5 pb-28 sm:pb-5 flex flex-col gap-6">
         {user && !isLoading && (
           <div className="flex flex-col gap-1">
             <p className="text-xs text-muted-foreground" data-testid="text-inbox-count">

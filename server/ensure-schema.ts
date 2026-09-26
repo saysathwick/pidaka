@@ -93,6 +93,38 @@ const statements = [
   `ALTER TABLE wall_settings ADD COLUMN IF NOT EXISTS moderation_keywords text NOT NULL DEFAULT '[]'`,
   `ALTER TABLE pidakas ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'live'`,
   `ALTER TABLE pidakas ADD COLUMN IF NOT EXISTS flag_reason text NOT NULL DEFAULT ''`,
+  `CREATE TABLE IF NOT EXISTS account_requests (
+    id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id varchar NOT NULL,
+    kind text NOT NULL,
+    status text NOT NULL DEFAULT 'pending',
+    anonymous_name text NOT NULL DEFAULT '',
+    auth_provider text NOT NULL DEFAULT '',
+    auth_subject text NOT NULL DEFAULT '',
+    email text NOT NULL DEFAULT '',
+    phone text NOT NULL DEFAULT '',
+    snapshot_json text NOT NULL DEFAULT '{}',
+    created_at timestamp NOT NULL DEFAULT now(),
+    resolved_at timestamp
+  )`,
+  `CREATE INDEX IF NOT EXISTS account_requests_status_idx ON account_requests (status)`,
+  `CREATE INDEX IF NOT EXISTS account_requests_user_id_idx ON account_requests (user_id)`,
+  `CREATE TABLE IF NOT EXISTS archived_accounts (
+    id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+    original_user_id varchar NOT NULL,
+    status text NOT NULL,
+    anonymous_name text NOT NULL DEFAULT '',
+    auth_provider text NOT NULL DEFAULT '',
+    auth_subject text NOT NULL DEFAULT '',
+    email text NOT NULL DEFAULT '',
+    phone text NOT NULL DEFAULT '',
+    snapshot_json text NOT NULL DEFAULT '{}',
+    request_id varchar,
+    archived_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS archived_accounts_status_idx ON archived_accounts (status)`,
+  `CREATE INDEX IF NOT EXISTS archived_accounts_auth_idx ON archived_accounts (auth_provider, auth_subject)`,
+  `CREATE INDEX IF NOT EXISTS archived_accounts_email_idx ON archived_accounts (email)`,
 ];
 
 export async function ensureSchema(): Promise<void> {

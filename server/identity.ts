@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { isDemoMode } from "./db";
 import { generateAnonymousName } from "@shared/names";
 import type { User } from "@shared/schema";
+import { handleArchivedSignIn } from "./account-gate";
 
 const JWT_SECRET = process.env.SESSION_SECRET!;
 
@@ -70,6 +71,18 @@ export async function findOrCreateAuthUser(input: {
   phone?: string | null;
   allowCreate?: boolean;
 }): Promise<{ user: User; created: boolean }> {
+  const archived =
+    (await storage.findArchivedByAuth(input.provider, input.subject)) ||
+    (input.phone ? await storage.findArchivedByPhone(input.phone) : undefined) ||
+    (input.email ? await storage.findArchivedByEmail(input.email) : undefined);
+  if (archived) {
+    const gate = await handleArchivedSignIn(archived);
+    const err = new Error(gate.message) as Error & { status?: number; code?: string };
+    err.status = gate.status;
+    err.code = "ACCOUNT_ARCHIVED";
+    throw err;
+  }
+
   const existingAuth = await storage.getUserByAuth(input.provider, input.subject);
   if (existingAuth) return { user: existingAuth, created: false };
 

@@ -66,14 +66,17 @@ export async function attachNativePushListeners(handlers: {
     }),
     PushNotifications.addListener("registrationError", () => {}),
     PushNotifications.addListener("pushNotificationReceived", (notification) => {
+      const kind = String(notification.data?.kind || "burn");
+      if (kind !== "burn") return;
       handlers.onBurn({
         title: notification.title,
         body: notification.body,
         n: Number(notification.data?.n),
       });
     }),
-    PushNotifications.addListener("pushNotificationActionPerformed", () => {
-      handlers.onOpenInbox();
+    PushNotifications.addListener("pushNotificationActionPerformed", (event) => {
+      const kind = String(event.notification?.data?.kind || "burn");
+      if (kind === "burn") handlers.onOpenInbox();
     }),
   ]);
 

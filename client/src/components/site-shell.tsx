@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AppHeader, type HeaderPlace } from "@/components/app-header";
 import { SiteFooter } from "@/components/site-footer";
 import { BurnAlertPrompt } from "@/components/burn-alert-prompt";
+import { GlobalDropFab } from "@/components/global-drop-fab";
 import { cn } from "@/lib/utils";
 
 export function SiteShell({
@@ -23,6 +24,7 @@ export function SiteShell({
       <BurnAlertPrompt />
       <div className={cn("flex-1", className)}>{children}</div>
       <SiteFooter padded={paddedFooter} />
+      <GlobalDropFab place={place} />
     </div>
   );
 }

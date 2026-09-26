@@ -27,6 +27,32 @@ export default function WallPage() {
   const [composerInView, setComposerInView] = useState(true);
   const composerRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const openCompose = () => setComposeOpen(true);
+
+    const consumeFlag = () => {
+      try {
+        if (sessionStorage.getItem("pidaka-open-compose") !== "1") return;
+        sessionStorage.removeItem("pidaka-open-compose");
+        openCompose();
+      } catch {
+        // ignore
+      }
+    };
+
+    consumeFlag();
+    window.addEventListener("pidaka-drop-it", openCompose);
+    return () => window.removeEventListener("pidaka-drop-it", openCompose);
+  }, []);
+
+  // Also honor ?drop=1 deep links
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("drop") !== "1") return;
+    setComposeOpen(true);
+    window.history.replaceState({}, "", "/");
+  }, []);
+
   const { data: pidakas, isLoading, isError, isFetching, refetch } = useQuery<PidakaItem[]>({
     queryKey: ["/api/pidakas"],
     refetchInterval: 12000,
@@ -113,12 +139,26 @@ export default function WallPage() {
   useEffect(() => {
     const el = composerRef.current;
     if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setComposerInView(Boolean(entry?.isIntersecting)),
-      { threshold: 0.35, rootMargin: "-72px 0px 0px 0px" },
-    );
+
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      // Hide FAB only while the inline composer is still mostly on screen
+      setComposerInView(rect.bottom > 120);
+    };
+
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    const observer = new IntersectionObserver(() => update(), {
+      threshold: [0, 0.15, 0.35, 0.6, 1],
+      rootMargin: "-80px 0px 0px 0px",
+    });
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      observer.disconnect();
+    };
   }, []);
 
   const handlePost = () => {

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { createRoot } from "react-dom/client";
+import { Capacitor } from "@capacitor/core";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { ThemeProvider } from "@/lib/theme";
@@ -10,6 +11,10 @@ import HearthPage from "@/pages/hearth";
 import HearthUsersPage from "@/pages/hearth-users";
 import { initNativeChrome, useAndroidBackButton } from "@/lib/capacitor";
 import "./index.css";
+
+if (Capacitor.isNativePlatform()) {
+  document.documentElement.classList.add("native-app");
+}
 
 function HearthApp() {
   useAndroidBackButton();

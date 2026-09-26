@@ -38,18 +38,18 @@ export default function AboutPage() {
 
   return (
     <SiteShell place="legal">
-      <div className="mx-auto w-full max-w-2xl px-4 pb-16">
+      <div className="mx-auto w-full max-w-2xl px-4 pb-28 pt-2 sm:pb-16">
         <nav
-          className="sticky top-16 z-40 -mx-4 mb-10 border-b border-border/60 bg-background/85 px-4 py-3 backdrop-blur-xl"
+          className="sticky z-40 -mx-4 mb-10 border-b border-border/60 bg-background/85 px-4 py-3 backdrop-blur-xl top-[var(--app-sticky-under-header)]"
           aria-label="About"
         >
-          <div className="flex flex-wrap gap-x-5 gap-y-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          <div className="flex gap-x-5 gap-y-2 overflow-x-auto pb-0.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {SECTIONS.map((section) => (
               <Link
                 key={section.id}
                 href={section.href}
                 className={cn(
-                  "hover:text-foreground",
+                  "shrink-0 whitespace-nowrap hover:text-foreground",
                   active === section.id && "text-foreground",
                 )}
                 data-testid={`link-about-${section.id}`}
@@ -60,7 +60,7 @@ export default function AboutPage() {
           </div>
         </nav>
 
-        <section id="about" className="scroll-mt-32">
+        <section id="about" className="scroll-mt-[calc(var(--app-sticky-under-header)+3.5rem)]">
           <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">Pidaka</p>
           <h1 className="mt-3 font-serif text-4xl tracking-tight sm:text-5xl">About</h1>
           <p className="mt-4 text-base leading-relaxed text-muted-foreground">
@@ -147,7 +147,7 @@ function AboutBlock({
   children: ReactNode;
 }) {
   return (
-    <section id={id} className="mt-20 scroll-mt-32 border-t border-border/60 pt-12">
+    <section id={id} className="mt-20 scroll-mt-[calc(var(--app-sticky-under-header)+3.5rem)] border-t border-border/60 pt-12">
       <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">{kicker}</p>
       <h2 className="mt-3 font-serif text-4xl tracking-tight">{title}</h2>
       <p className="mt-4 text-base leading-relaxed text-muted-foreground">{lede}</p>

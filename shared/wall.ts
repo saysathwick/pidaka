@@ -119,6 +119,25 @@ export type AdminUser = {
   createdAt: string;
 };
 
+export type AdminAccountRequest = {
+  id: string;
+  userId: string;
+  kind: "deactivate" | "delete" | "activate";
+  status: "pending" | "approved" | "rejected";
+  anonymousName: string;
+  authProvider: string;
+  createdAt: string;
+};
+
+export type AdminArchivedAccount = {
+  id: string;
+  originalUserId: string;
+  status: "deactivated" | "deleted" | "suspended";
+  anonymousName: string;
+  authProvider: string;
+  archivedAt: string;
+};
+
 export type AdminStats = {
   users: number;
   pidakas: number;

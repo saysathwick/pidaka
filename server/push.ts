@@ -2,8 +2,9 @@ import { createECDH, createHash } from "node:crypto";
 import webpush from "web-push";
 import { OPERATOR } from "@shared/site";
 import { burnAlertPayload } from "@shared/burn-alert";
+import { accountAlertPayload, type AccountAlertKind } from "@shared/account-alert";
 import { storage } from "./storage";
-import { fcmReady, notifyBurnViaFcm } from "./fcm";
+import { fcmReady, notifyAccountViaFcm, notifyBurnViaFcm } from "./fcm";
 import { readWallSettings } from "./wall-settings";
 
 function urlSafe(buf: Buffer) {
@@ -57,39 +58,38 @@ export function burnAlertsReady() {
   return Boolean(keys) || fcmReady();
 }
 
+async function sendWebPush(userId: string, payload: object) {
+  if (!keys) return;
+  const subs = await storage.listPushSubscriptions(userId);
+  if (subs.length === 0) return;
+  await Promise.all(
+    subs.map(async (sub) => {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: sub.endpoint,
+            keys: { p256dh: sub.p256dh, auth: sub.auth },
+          },
+          JSON.stringify(payload),
+          { TTL: 12 * 60 * 60, urgency: "high" },
+        );
+      } catch (err) {
+        const status = (err as { statusCode?: number }).statusCode;
+        if (status === 404 || status === 410) {
+          await storage.deletePushSubscriptionByEndpoint(sub.endpoint);
+        }
+      }
+    }),
+  );
+}
+
 export async function notifyBurnArrived(userId: string, unread: number) {
   const settings = await readWallSettings();
   const payload = burnAlertPayload(settings, unread);
-  const tasks: Promise<void>[] = [];
+  await Promise.all([sendWebPush(userId, payload), notifyBurnViaFcm(userId, payload)]);
+}
 
-  if (keys) {
-    tasks.push(
-      (async () => {
-        const subs = await storage.listPushSubscriptions(userId);
-        if (subs.length === 0) return;
-        await Promise.all(
-          subs.map(async (sub) => {
-            try {
-              await webpush.sendNotification(
-                {
-                  endpoint: sub.endpoint,
-                  keys: { p256dh: sub.p256dh, auth: sub.auth },
-                },
-                JSON.stringify(payload),
-                { TTL: 12 * 60 * 60, urgency: "high" },
-              );
-            } catch (err) {
-              const status = (err as { statusCode?: number }).statusCode;
-              if (status === 404 || status === 410) {
-                await storage.deletePushSubscriptionByEndpoint(sub.endpoint);
-              }
-            }
-          }),
-        );
-      })(),
-    );
-  }
-
-  tasks.push(notifyBurnViaFcm(userId, payload));
-  await Promise.all(tasks);
+export async function notifyAccountEvent(userId: string, kind: AccountAlertKind) {
+  const payload = accountAlertPayload(kind);
+  await Promise.all([sendWebPush(userId, payload), notifyAccountViaFcm(userId, payload)]);
 }

@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import type { Burn, InsertUser, Pidaka, User } from "@shared/schema";
+import type {
+  AccountArchiveStatus,
+  AccountRequestRow,
+  ArchivedAccountRow,
+  Burn,
+  InsertUser,
+  Pidaka,
+  User,
+} from "@shared/schema";
 import { excerptPidaka } from "@shared/names";
 import type { WallSettings, PidakaStatus } from "@shared/wall";
 import { parseModerationKeywords, sanitizeModerationKeywords } from "@shared/moderation";
@@ -76,6 +84,9 @@ export class DemoStorage implements IStorage {
   private views = new Map<string, Set<string>>();
   private pushes: Array<{ userId: string; endpoint: string; p256dh: string; auth: string; createdAt: Date }> = [];
   private deviceTokens: Array<{ userId: string; token: string; platform: string; createdAt: Date }> = [];
+  private accountRequests: AccountRequestRow[] = [];
+  private archivedAccounts: ArchivedAccountRow[] = [];
+  private wall: WallSettings | null = null;
 
   async getUser(id: string) {
     const user = this.users.get(id);
@@ -338,8 +349,6 @@ export class DemoStorage implements IStorage {
     return counts;
   }
 
-  private wall: WallSettings | null = null;
-
   async deletePidaka(id: string) {
     const before = this.pidakas.length;
     this.pidakas = this.pidakas.filter((p) => p.id !== id);
@@ -441,5 +450,216 @@ export class DemoStorage implements IStorage {
           createdAt: revealed.createdAt,
         };
       });
+  }
+
+  async createAccountRequest(userId: string, kind: "deactivate" | "delete") {
+    const pending = await this.getPendingAccountRequestForUser(userId);
+    if (pending) return pending;
+    const user = this.users.get(userId);
+    if (!user) throw new Error("User not found");
+    const revealed = revealUser(user);
+    const row: AccountRequestRow = {
+      id: randomUUID(),
+      userId,
+      kind,
+      status: "pending",
+      anonymousName: revealed.anonymousName,
+      authProvider: user.authProvider,
+      authSubject: user.authSubject || "",
+      email: user.email,
+      phone: user.phone || "",
+      snapshotJson: JSON.stringify(user),
+      createdAt: new Date(),
+      resolvedAt: null,
+    };
+    this.accountRequests.unshift(row);
+    return row;
+  }
+
+  async createActivateRequest(archived: ArchivedAccountRow) {
+    const existing = this.accountRequests.find(
+      (row) => row.userId === archived.originalUserId && row.kind === "activate" && row.status === "pending",
+    );
+    if (existing) return existing;
+    const row: AccountRequestRow = {
+      id: randomUUID(),
+      userId: archived.originalUserId,
+      kind: "activate",
+      status: "pending",
+      anonymousName: archived.anonymousName,
+      authProvider: archived.authProvider,
+      authSubject: archived.authSubject,
+      email: archived.email,
+      phone: archived.phone || "",
+      snapshotJson: archived.snapshotJson,
+      createdAt: new Date(),
+      resolvedAt: null,
+    };
+    this.accountRequests.unshift(row);
+    return row;
+  }
+
+  async getPendingAccountRequestForUser(userId: string) {
+    return this.accountRequests.find((row) => row.userId === userId && row.status === "pending");
+  }
+
+  async listPendingAccountRequests() {
+    return this.accountRequests.filter((row) => row.status === "pending").slice(0, 200);
+  }
+
+  async getAccountRequest(id: string) {
+    return this.accountRequests.find((row) => row.id === id);
+  }
+
+  async rejectAccountRequest(id: string) {
+    const row = this.accountRequests.find((item) => item.id === id && item.status === "pending");
+    if (!row) return undefined;
+    row.status = "rejected";
+    row.resolvedAt = new Date();
+    return row;
+  }
+
+  private removeUserIndexes(user: User) {
+    this.users.delete(user.id);
+    for (const key of Array.from(this.usersByEmail.keys())) {
+      if (this.usersByEmail.get(key)?.id === user.id) this.usersByEmail.delete(key);
+    }
+    for (const key of Array.from(this.usersByPhone.keys())) {
+      if (this.usersByPhone.get(key)?.id === user.id) this.usersByPhone.delete(key);
+    }
+    for (const key of Array.from(this.usersByAuth.keys())) {
+      if (this.usersByAuth.get(key)?.id === user.id) this.usersByAuth.delete(key);
+    }
+  }
+
+  private async archiveFromRequest(request: AccountRequestRow, status: AccountArchiveStatus) {
+    const archived = await this.moveUserToArchive(request.userId, status, request.id, request.snapshotJson);
+    if (!archived) return undefined;
+    request.status = "approved";
+    request.resolvedAt = new Date();
+    return { request, archived };
+  }
+
+  private async moveUserToArchive(
+    userId: string,
+    status: AccountArchiveStatus,
+    requestId?: string | null,
+    snapshotJson?: string,
+  ): Promise<ArchivedAccountRow | undefined> {
+    const user = this.users.get(userId);
+    if (!user && !snapshotJson) return undefined;
+    const snap = snapshotJson ? (JSON.parse(snapshotJson) as User) : user!;
+    const revealed = revealUser(snap);
+
+    if (status === "deleted") {
+      const ownedIds = new Set(this.pidakas.filter((p) => p.creatorUserId === userId).map((p) => p.id));
+      this.burns = this.burns.filter(
+        (b) =>
+          !ownedIds.has(b.pidakaId) &&
+          b.senderUserId !== userId &&
+          b.receiverUserId !== userId,
+      );
+      this.pidakas = this.pidakas.filter((p) => p.creatorUserId !== userId);
+      this.pushes = this.pushes.filter((row) => row.userId !== userId);
+      this.deviceTokens = this.deviceTokens.filter((row) => row.userId !== userId);
+    }
+    for (const row of this.accountRequests) {
+      if (row.userId === userId && row.status === "pending") {
+        row.status = "rejected";
+        row.resolvedAt = new Date();
+      }
+    }
+    if (user) this.removeUserIndexes(user);
+    const archived: ArchivedAccountRow = {
+      id: randomUUID(),
+      originalUserId: userId,
+      status,
+      anonymousName: revealed.anonymousName,
+      authProvider: snap.authProvider,
+      authSubject: snap.authSubject || "",
+      email: snap.email,
+      phone: snap.phone || "",
+      snapshotJson: snapshotJson || JSON.stringify(snap),
+      requestId: requestId ?? null,
+      archivedAt: new Date(),
+    };
+    this.archivedAccounts.unshift(archived);
+    return archived;
+  }
+
+  async approveDeactivateRequest(id: string) {
+    const request = await this.getAccountRequest(id);
+    if (!request || request.status !== "pending" || request.kind !== "deactivate") return undefined;
+    return this.archiveFromRequest(request, "deactivated");
+  }
+
+  async approveDeleteRequest(id: string) {
+    const request = await this.getAccountRequest(id);
+    if (!request || request.status !== "pending" || request.kind !== "delete") return undefined;
+    return this.archiveFromRequest(request, "deleted");
+  }
+
+  private restoreArchivedRow(archived: ArchivedAccountRow): User | undefined {
+    const snap = JSON.parse(archived.snapshotJson) as User;
+    const user: User = {
+      ...snap,
+      createdAt: snap.createdAt ? new Date(snap.createdAt) : new Date(),
+    };
+    this.users.set(user.id, user);
+    this.usersByEmail.set(user.email, user);
+    if (user.phone) this.usersByPhone.set(user.phone, user);
+    if (user.authSubject) this.usersByAuth.set(`${user.authProvider}:${user.authSubject}`, user);
+    this.archivedAccounts = this.archivedAccounts.filter((row) => row.id !== archived.id);
+    return revealUser(user);
+  }
+
+  async approveActivateRequest(id: string) {
+    const request = await this.getAccountRequest(id);
+    if (!request || request.status !== "pending" || request.kind !== "activate") return undefined;
+    const archived = this.archivedAccounts.find(
+      (row) => row.originalUserId === request.userId && row.status === "deactivated",
+    );
+    if (!archived) return undefined;
+    const user = this.restoreArchivedRow(archived);
+    if (!user) return undefined;
+    request.status = "approved";
+    request.resolvedAt = new Date();
+    return { request, user };
+  }
+
+  async suspendUser(userId: string) {
+    return this.moveUserToArchive(userId, "suspended");
+  }
+
+  async unsuspendArchived(archivedId: string) {
+    const archived = this.archivedAccounts.find(
+      (row) => row.id === archivedId && row.status === "suspended",
+    );
+    if (!archived) return undefined;
+    return this.restoreArchivedRow(archived);
+  }
+
+  async findArchivedByAuth(provider: string, subject: string) {
+    return this.archivedAccounts.find((row) => row.authProvider === provider && row.authSubject === subject);
+  }
+
+  async findArchivedByEmail(email: string) {
+    const hashed = blind(email.toLowerCase());
+    return (
+      this.archivedAccounts.find((row) => row.email === hashed) ||
+      this.archivedAccounts.find((row) => row.email === email.toLowerCase())
+    );
+  }
+
+  async findArchivedByPhone(phone: string) {
+    const hashed = blind(phone);
+    return (
+      this.archivedAccounts.find((row) => row.phone === hashed) ||
+      this.archivedAccounts.find((row) => row.phone === phone)
+    );
+  }
+
+  async listArchivedAccounts() {
+    return this.archivedAccounts.slice(0, 200);
   }
 }
