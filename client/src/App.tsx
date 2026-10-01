@@ -16,7 +16,7 @@ import AboutPage from "@/pages/about";
 import HearthPage from "@/pages/hearth";
 import HearthUsersPage from "@/pages/hearth-users";
 import { usePageMeta } from "@/lib/page-meta";
-import { CinematicIntro, shouldPlayIntro } from "@/components/cinematic-intro";
+import { CinematicIntro, recordVisit, shouldPlayIntro } from "@/components/cinematic-intro";
 import { NameReveal } from "@/components/name-reveal";
 import { PidakaMark } from "@/components/pidaka-logo";
 import { AnimatePresence, motion } from "framer-motion";
@@ -40,9 +40,13 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 function AppContent() {
   const { isLoading, justNamed, clearJustNamed } = useAuth();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [introDone, setIntroDone] = useState(() => !shouldPlayIntro());
   usePageMeta(location);
+
+  useEffect(() => {
+    if (introDone) recordVisit();
+  }, [introDone]);
   const onHearth = location === "/hearth" || location === "/hearth/users";
 
   if (onHearth) {
@@ -50,8 +54,11 @@ function AppContent() {
     return <HearthPage />;
   }
 
-  if (!introDone) {
-    return <CinematicIntro onComplete={() => setIntroDone(true)} />;
+  if (!introDone || location === "/intro") {
+    return <CinematicIntro onComplete={() => {
+      setIntroDone(true);
+      if (location === "/intro") navigate("/");
+    }} />;
   }
 
   if (justNamed) {

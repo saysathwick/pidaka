@@ -160,6 +160,12 @@ export function AppMenu({
               Wall
             </p>
             <MenuRow
+              label="How Pidaka works"
+              icon={Info}
+              testId="button-menu-intro"
+              onClick={() => go("/intro")}
+            />
+            <MenuRow
               label="Drop it"
               icon={Flame}
               testId="button-menu-drop-it"
