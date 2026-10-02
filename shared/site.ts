@@ -17,27 +17,57 @@ export const OPERATOR = {
 
 export const LEGAL_UPDATED = "23 September 2026";
 
-export const APP_PATHS = ["/", "/inbox", "/about", "/privacy", "/terms", "/contact", "/delete-account", "/child-safety"] as const;
+export const APP_PATHS = [
+  "/",
+  "/inbox",
+  "/intro",
+  "/about",
+  "/privacy",
+  "/terms",
+  "/contact",
+  "/delete-account",
+  "/child-safety",
+  "/hearth",
+  "/hearth/users",
+] as const;
 
 export type AppPath = (typeof APP_PATHS)[number];
 
-type PageMeta = {
+/** Public pages listed in sitemap.xml. Everything else in APP_PATHS is noindex. */
+export const INDEXABLE_PATHS = [
+  "/",
+  "/about",
+  "/privacy",
+  "/terms",
+  "/contact",
+  "/delete-account",
+  "/child-safety",
+] as const satisfies readonly AppPath[];
+
+export type PageMeta = {
   title: string;
   description: string;
+  index: boolean;
 };
 
-const PAGE_META: Record<AppPath, PageMeta> = {
+const PAGE_META: Record<AppPath, Omit<PageMeta, "index">> = {
   "/": {
-    title: "Pidaka",
-    description: SITE_TAGLINE,
+    title: "Pidaka — Speak freely. Anonymously.",
+    description:
+      "An anonymous wall for the things you would not sign. Read for free, leave a thought, and get private replies. No profiles, no followers. Gone in 48 hours.",
   },
   "/inbox": {
     title: "Burns — Pidaka",
     description: "Private replies to your pidakas. The sender is never named.",
   },
+  "/intro": {
+    title: "How Pidaka works — Pidaka",
+    description: "Discover, connect, let go. A short guide to the anonymous wall.",
+  },
   "/about": {
-    title: "About — Pidaka",
-    description: "Speak freely. Anonymously. What Pidaka is, and how to reach Phito.",
+    title: "About Pidaka — an anonymous wall for honest thoughts",
+    description:
+      "What Pidaka is: an anonymous wall where you share thoughts without a public identity, read others, and send private burns. Made by Phito in India.",
   },
   "/privacy": {
     title: "Privacy — Pidaka",
@@ -59,11 +89,20 @@ const PAGE_META: Record<AppPath, PageMeta> = {
     title: "Child safety — Pidaka",
     description: "Pidaka standards against child sexual abuse and exploitation (CSAE).",
   },
+  "/hearth": {
+    title: "Hearth — Pidaka",
+    description: "The keeper's room.",
+  },
+  "/hearth/users": {
+    title: "Hearth — Pidaka",
+    description: "The keeper's room.",
+  },
 };
 
 const NOT_FOUND_META: PageMeta = {
   title: "Lost — Pidaka",
   description: "This room does not exist. The wall is still here.",
+  index: false,
 };
 
 export function normalizePath(pathname: string): string {
@@ -76,14 +115,18 @@ export function isAppPath(pathname: string): pathname is AppPath {
   return (APP_PATHS as readonly string[]).includes(normalizePath(pathname));
 }
 
+export function isIndexablePath(pathname: string): boolean {
+  return (INDEXABLE_PATHS as readonly string[]).includes(normalizePath(pathname));
+}
+
 export function metaForPath(pathname: string): PageMeta {
   const path = normalizePath(pathname);
-  if (path === "/hearth" || path === "/hearth/users") {
-    return { title: "Hearth — Pidaka", description: "The keeper's room." };
-  }
-  if (isAppPath(path)) return PAGE_META[path];
+  if (isAppPath(path)) return { ...PAGE_META[path], index: isIndexablePath(path) };
   return NOT_FOUND_META;
 }
+
+export const ROBOTS_INDEX = "index, follow, max-image-preview:large";
+export const ROBOTS_NOINDEX = "noindex, nofollow";
 
 function escapeAttr(value: string) {
   return value
@@ -92,15 +135,55 @@ function escapeAttr(value: string) {
     .replace(/</g, "&lt;");
 }
 
+/** Organization + WebSite structured data so search engines know who runs Pidaka. */
+export function structuredData(origin: string) {
+  const base = origin || "";
+  const json = JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${base}/#organization`,
+        name: OPERATOR.legalName,
+        url: OPERATOR.website,
+        email: OPERATOR.email,
+        logo: `${base}/logo.png`,
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${base}/#website`,
+        name: SITE_NAME,
+        url: `${base}/`,
+        description: PAGE_META["/"].description,
+        inLanguage: "en",
+        publisher: { "@id": `${base}/#organization` },
+      },
+    ],
+  });
+  // Keep the JSON from closing the script tag early
+  return json.replace(/</g, "\\u003c");
+}
+
 export function applyDocumentMeta(html: string, pathname: string, origin = "") {
   const meta = metaForPath(pathname);
   const path = normalizePath(pathname);
-  const canonicalPath = path === "/" ? "/" : path;
-  const canonical = origin ? `${origin}${canonicalPath}` : canonicalPath;
+  const canonical = origin ? `${origin}${path}` : path;
   const image = origin ? `${origin}/og.png` : "/og.png";
+  const ldJson = meta.index
+    ? `<script type="application/ld+json">${structuredData(origin)}</script>\n  </head>`
+    : "</head>";
 
   return html
     .replace(/<title>[^<]*<\/title>/, `<title>${escapeAttr(meta.title)}</title>`)
+    .replace(
+      /(<meta name="robots" content=")[^"]*(")/,
+      `$1${meta.index ? ROBOTS_INDEX : ROBOTS_NOINDEX}$2`,
+    )
+    .replace(
+      /(<link rel="canonical" href=")[^"]*(")/,
+      `$1${escapeAttr(canonical)}$2`,
+    )
+    .replace("</head>", ldJson)
     .replace(
       /(<meta name="description" content=")[^"]*(")/,
       `$1${escapeAttr(meta.description)}$2`,

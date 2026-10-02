@@ -1,5 +1,5 @@
-import type { Request } from "express";
-import { applyDocumentMeta, isAppPath, normalizePath } from "@shared/site";
+import type { Request, Response } from "express";
+import { applyDocumentMeta, isAppPath, metaForPath, normalizePath, ROBOTS_NOINDEX } from "@shared/site";
 
 export function requestOrigin(req: Request) {
   const env = process.env.APP_PUBLIC_URL?.replace(/\/$/, "");
@@ -10,10 +10,22 @@ export function requestOrigin(req: Request) {
   return `${proto}://${host}`;
 }
 
+/** Full request path. Inside a catch-all `app.use`, Express rewrites `req.path` to "/". */
+export function requestPath(req: Request) {
+  return normalizePath(req.originalUrl || req.url || "/");
+}
+
 export function htmlForRequest(html: string, req: Request) {
-  return applyDocumentMeta(html, req.path, requestOrigin(req));
+  return applyDocumentMeta(html, requestPath(req), requestOrigin(req));
 }
 
 export function pageStatus(pathname: string) {
   return isAppPath(normalizePath(pathname)) ? 200 : 404;
+}
+
+export function sendPage(req: Request, res: Response, html: string) {
+  const path = requestPath(req);
+  const headers: Record<string, string> = { "Content-Type": "text/html; charset=utf-8" };
+  if (!metaForPath(path).index) headers["X-Robots-Tag"] = ROBOTS_NOINDEX;
+  res.status(pageStatus(path)).set(headers).end(htmlForRequest(html, req));
 }

@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
-import { htmlForRequest, pageStatus } from "./page-html";
+import { sendPage } from "./page-html";
 
 export function serveStatic(app: Express) {
   const distPath = path.resolve(__dirname, "public");
@@ -15,7 +15,6 @@ export function serveStatic(app: Express) {
 
   app.use("/{*path}", (req, res) => {
     const indexPath = path.resolve(distPath, "index.html");
-    const html = htmlForRequest(fs.readFileSync(indexPath, "utf-8"), req);
-    res.status(pageStatus(req.path)).set({ "Content-Type": "text/html" }).end(html);
+    sendPage(req, res, fs.readFileSync(indexPath, "utf-8"));
   });
 }

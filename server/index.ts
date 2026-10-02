@@ -2,6 +2,7 @@ import "./env";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
+import { registerSeoRoutes } from "./seo";
 import { createServer } from "http";
 import { isDemoMode } from "./db";
 import { ensureSchema } from "./ensure-schema";
@@ -67,6 +68,7 @@ app.use((req, res, next) => {
     }
   }
 
+  registerSeoRoutes(app);
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
