@@ -1,5 +1,13 @@
 import type { Request, Response } from "express";
-import { applyDocumentMeta, isAppPath, metaForPath, normalizePath, ROBOTS_NOINDEX } from "@shared/site";
+import { applyDocumentMeta, isAppPath, metaForPath, normalizePath, ROBOTS_NOINDEX, type DocumentExtras } from "@shared/site";
+import { howItWorksFaqSchema, renderHowItWorksHtml } from "@shared/how-it-works";
+
+function extrasForPath(path: string): DocumentExtras {
+  if (path === "/how-it-works") {
+    return { prerender: renderHowItWorksHtml(), schema: [howItWorksFaqSchema()] };
+  }
+  return {};
+}
 
 export function requestOrigin(req: Request) {
   const env = process.env.APP_PUBLIC_URL?.replace(/\/$/, "");
@@ -16,7 +24,8 @@ export function requestPath(req: Request) {
 }
 
 export function htmlForRequest(html: string, req: Request) {
-  return applyDocumentMeta(html, requestPath(req), requestOrigin(req));
+  const path = requestPath(req);
+  return applyDocumentMeta(html, path, requestOrigin(req), extrasForPath(path));
 }
 
 export function pageStatus(pathname: string) {

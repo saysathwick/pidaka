@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { OPERATOR, SITE_NAME } from "@shared/site";
 
 const LINKS = [
+  { href: "/how-it-works", label: "How it works" },
   { href: "/about", label: "About" },
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
@@ -29,7 +30,7 @@ export function SiteFooter({ padded = false }: { padded?: boolean }) {
               key={link.href}
               href={link.href}
               className="hover:text-foreground"
-              data-testid={`link-footer-${link.label.toLowerCase()}`}
+              data-testid={`link-footer-${link.label.toLowerCase().replace(/\s+/g, "-")}`}
             >
               {link.label}
             </Link>

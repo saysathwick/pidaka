@@ -162,8 +162,8 @@ export function AppMenu({
             <MenuRow
               label="How Pidaka works"
               icon={Info}
-              testId="button-menu-intro"
-              onClick={() => go("/intro")}
+              testId="button-menu-how-it-works"
+              onClick={() => go("/how-it-works")}
             />
             <MenuRow
               label="Drop it"

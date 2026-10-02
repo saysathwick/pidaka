@@ -21,6 +21,7 @@ export const APP_PATHS = [
   "/",
   "/inbox",
   "/intro",
+  "/how-it-works",
   "/about",
   "/privacy",
   "/terms",
@@ -36,6 +37,7 @@ export type AppPath = (typeof APP_PATHS)[number];
 /** Public pages listed in sitemap.xml. Everything else in APP_PATHS is noindex. */
 export const INDEXABLE_PATHS = [
   "/",
+  "/how-it-works",
   "/about",
   "/privacy",
   "/terms",
@@ -61,8 +63,13 @@ const PAGE_META: Record<AppPath, Omit<PageMeta, "index">> = {
     description: "Private replies to your pidakas. The sender is never named.",
   },
   "/intro": {
-    title: "How Pidaka works — Pidaka",
-    description: "Discover, connect, let go. A short guide to the anonymous wall.",
+    title: "Welcome to Pidaka",
+    description: "Discover, connect, let go. An interactive introduction to the anonymous wall.",
+  },
+  "/how-it-works": {
+    title: "How Pidaka works — share thoughts anonymously",
+    description:
+      "How Pidaka works: leave a thought on a public wall without your name, read others for free, and send private anonymous replies called burns. Every pidaka leaves after 48 hours.",
   },
   "/about": {
     title: "About Pidaka — an anonymous wall for honest thoughts",
@@ -136,11 +143,12 @@ function escapeAttr(value: string) {
 }
 
 /** Organization + WebSite structured data so search engines know who runs Pidaka. */
-export function structuredData(origin: string) {
+export function structuredData(origin: string, extra: object[] = []) {
   const base = origin || "";
   const json = JSON.stringify({
     "@context": "https://schema.org",
     "@graph": [
+      ...extra,
       {
         "@type": "Organization",
         "@id": `${base}/#organization`,
@@ -164,16 +172,26 @@ export function structuredData(origin: string) {
   return json.replace(/</g, "\\u003c");
 }
 
-export function applyDocumentMeta(html: string, pathname: string, origin = "") {
+export type DocumentExtras = {
+  /** Static HTML placed inside #root for crawlers; React replaces it on mount. */
+  prerender?: string;
+  /** Extra schema.org nodes for this page's structured data graph. */
+  schema?: object[];
+};
+
+export function applyDocumentMeta(html: string, pathname: string, origin = "", extras: DocumentExtras = {}) {
   const meta = metaForPath(pathname);
   const path = normalizePath(pathname);
   const canonical = origin ? `${origin}${path}` : path;
   const image = origin ? `${origin}/og.png` : "/og.png";
   const ldJson = meta.index
-    ? `<script type="application/ld+json">${structuredData(origin)}</script>\n  </head>`
+    ? `<script type="application/ld+json">${structuredData(origin, extras.schema)}</script>\n  </head>`
     : "</head>";
+  const withRoot = extras.prerender
+    ? html.replace('<div id="root"></div>', () => `<div id="root">${extras.prerender}</div>`)
+    : html;
 
-  return html
+  return withRoot
     .replace(/<title>[^<]*<\/title>/, `<title>${escapeAttr(meta.title)}</title>`)
     .replace(
       /(<meta name="robots" content=")[^"]*(")/,
@@ -183,7 +201,7 @@ export function applyDocumentMeta(html: string, pathname: string, origin = "") {
       /(<link rel="canonical" href=")[^"]*(")/,
       `$1${escapeAttr(canonical)}$2`,
     )
-    .replace("</head>", ldJson)
+    .replace("</head>", () => ldJson)
     .replace(
       /(<meta name="description" content=")[^"]*(")/,
       `$1${escapeAttr(meta.description)}$2`,

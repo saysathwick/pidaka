@@ -13,6 +13,7 @@ import WallPage from "@/pages/wall";
 import InboxPage from "@/pages/inbox";
 import NotFound from "@/pages/not-found";
 import AboutPage from "@/pages/about";
+import HowItWorksPage from "@/pages/how-it-works";
 import HearthPage from "@/pages/hearth";
 import HearthUsersPage from "@/pages/hearth-users";
 import { usePageMeta } from "@/lib/page-meta";
@@ -102,6 +103,7 @@ function AppContent() {
                 <InboxPage />
               </RequireAuth>
             </Route>
+            <Route path="/how-it-works" component={HowItWorksPage} />
             <Route path="/about" component={AboutPage} />
             <Route path="/privacy" component={AboutPage} />
             <Route path="/terms" component={AboutPage} />
