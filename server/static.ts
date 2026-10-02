@@ -11,7 +11,8 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // index: false — "/" must go through sendPage for per-page meta and structured data
+  app.use(express.static(distPath, { index: false }));
 
   app.use("/{*path}", (req, res) => {
     const indexPath = path.resolve(distPath, "index.html");
