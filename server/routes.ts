@@ -90,7 +90,15 @@ import {
   setSessionCookie,
 } from "./http-security";
 import { mailDomainLooksReal } from "./mail-domain";
-import { burnAlertsReady, notifyAccountEvent, notifyBurnArrived, vapidPublicKey } from "./push";
+import {
+  HEARTH_PUSH_OWNER,
+  burnAlertsReady,
+  notifyAccountEvent,
+  notifyBurnArrived,
+  notifyHearthHeld,
+  sendHearthTestAlert,
+  vapidPublicKey,
+} from "./push";
 import { fcmReady } from "./fcm";
 
 if (!process.env.SESSION_SECRET) {
@@ -316,6 +324,49 @@ export async function registerRoutes(
       })));
     } catch (err) {
       return serverError(res, "Failed to list pidakas", err);
+    }
+  });
+
+  app.post("/api/admin/push/subscribe", limitPush, adminMiddleware as any, async (req: AdminRequest, res: Response) => {
+    if (!vapidPublicKey()) {
+      return res.status(404).json({ message: "Web alerts are not wired" });
+    }
+    const parsed = pushSubscribeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0].message });
+    }
+    try {
+      await storage.savePushSubscription(HEARTH_PUSH_OWNER, {
+        endpoint: parsed.data.endpoint,
+        p256dh: parsed.data.keys.p256dh,
+        auth: parsed.data.keys.auth,
+      });
+      void sendHearthTestAlert().catch(() => {});
+      return res.json({ ok: true });
+    } catch (err) {
+      return serverError(res, "Could not keep this device", err);
+    }
+  });
+
+  app.delete("/api/admin/push/subscribe", limitPush, adminMiddleware as any, async (req: AdminRequest, res: Response) => {
+    const parsed = pushUnsubscribeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.errors[0].message });
+    }
+    try {
+      await storage.deletePushSubscription(HEARTH_PUSH_OWNER, parsed.data.endpoint);
+      return res.json({ ok: true });
+    } catch (err) {
+      return serverError(res, "Could not drop this device", err);
+    }
+  });
+
+  app.post("/api/admin/push/test", limitPush, adminMiddleware as any, async (_req: AdminRequest, res: Response) => {
+    try {
+      await sendHearthTestAlert();
+      return res.json({ ok: true });
+    } catch (err) {
+      return serverError(res, "Could not send a test alert", err);
     }
   });
 
@@ -1131,6 +1182,9 @@ export async function registerRoutes(
         status,
         flagReason,
       });
+      if (status === "pending") {
+        void notifyHearthHeld(flagReason).catch(() => {});
+      }
       return res.status(201).json({
         id: pidaka.id,
         content: pidaka.content,

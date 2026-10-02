@@ -51,6 +51,15 @@ import {
   sanitizeNoticeLinks,
 } from "@shared/wall";
 import { defaultBurnAlertTemplate } from "@shared/burn-alert";
+import { MODERATION_KEYWORD_LIMIT, sanitizeModerationKeywords } from "@shared/moderation";
+import { SUGGESTED_MODERATION_KEYWORD_LIST } from "@shared/moderation-suggested";
+import {
+  disableHearthAlerts,
+  enableHearthAlerts,
+  hearthAlertsOn,
+  hearthAlertsSupported,
+  sendHearthTestAlert,
+} from "@/lib/hearth-alerts";
 
 type Overview = {
   settings: WallSettings;
@@ -149,6 +158,65 @@ export default function HearthPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  const [alertsOn, setAlertsOn] = useState(false);
+  const alertsSupported = hearthAlertsSupported();
+
+  useEffect(() => {
+    if (!open || !alertsSupported) return;
+    void hearthAlertsOn().then(setAlertsOn).catch(() => setAlertsOn(false));
+  }, [open, alertsSupported]);
+
+  useEffect(() => {
+    if (!open || !("serviceWorker" in navigator)) return;
+    const refreshHeld = (event: MessageEvent) => {
+      if (event.data?.kind !== "hearth-held") return;
+      void (hearthRequest("GET", "/api/admin/pidakas") as Promise<AdminPidaka[]>)
+        .then(setPidakas)
+        .catch(() => {});
+    };
+    navigator.serviceWorker.addEventListener("message", refreshHeld);
+    return () => navigator.serviceWorker.removeEventListener("message", refreshHeld);
+  }, [open]);
+
+  const toggleAlerts = async (next: boolean) => {
+    setBusy("alerts");
+    try {
+      if (next) {
+        await enableHearthAlerts();
+        toast({ title: "Alerts on", description: "A test alert is on its way." });
+      } else {
+        await disableHearthAlerts();
+        toast({ title: "Alerts off on this device" });
+      }
+      setAlertsOn(next);
+    } catch (err) {
+      toast({
+        title: next ? "Could not turn alerts on" : "Could not turn alerts off",
+        description: err instanceof Error ? err.message : "Try again",
+        variant: "destructive",
+      });
+      setAlertsOn(await hearthAlertsOn().catch(() => false));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const testAlerts = async () => {
+    setBusy("alerts");
+    try {
+      await sendHearthTestAlert();
+      toast({ title: "Test alert sent" });
+    } catch (err) {
+      toast({
+        title: "Test alert failed",
+        description: err instanceof Error ? err.message : "Try again",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const enter = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -554,6 +622,30 @@ export default function HearthPage() {
                 disabled={busy === "settings" || busy === "safety"}
                 onCheckedChange={(safetyCheckOpen) => void patch({ safetyCheckOpen })}
               />
+              {alertsSupported ? (
+                <div className="flex flex-col gap-2">
+                  <Door
+                    label="Alert this device"
+                    hint="Notify this browser when a post is held, even with the hearth closed."
+                    checked={alertsOn}
+                    disabled={busy === "alerts"}
+                    onCheckedChange={(next) => void toggleAlerts(next)}
+                  />
+                  {alertsOn ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="self-start"
+                      disabled={busy === "alerts"}
+                      onClick={() => void testAlerts()}
+                      data-testid="button-test-hearth-alert"
+                    >
+                      Send a test alert
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
               <form
                 className="flex flex-col gap-3"
                 onSubmit={(e) => {
@@ -571,7 +663,7 @@ export default function HearthPage() {
                   </Label>
                   <Textarea
                     id="safety-keywords"
-                    rows={5}
+                    rows={8}
                     value={keywordsDraft}
                     onChange={(e) => setKeywordsDraft(e.target.value)}
                     placeholder={"one word per line\nor comma,separated"}
@@ -579,18 +671,47 @@ export default function HearthPage() {
                     data-testid="input-safety-keywords"
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    Case-insensitive. Substring match. Empty list = nothing held while check is on.
+                    Whole words, any case. Also catches k1ll, s u i c i d e and kiiill. End with * to
+                    match word starts (suicid* = suicide, suicidal). Words with symbols (+91, bit.ly)
+                    match anywhere. Empty list = nothing held while check is on.
+                  </p>
+                  <p
+                    className={`text-[11px] ${
+                      sanitizeModerationKeywords(keywordsDraft).length >= MODERATION_KEYWORD_LIMIT
+                        ? "text-destructive"
+                        : "text-muted-foreground"
+                    }`}
+                    data-testid="text-keyword-count"
+                  >
+                    {sanitizeModerationKeywords(keywordsDraft).length} / {MODERATION_KEYWORD_LIMIT}
                   </p>
                 </div>
-                <Button
-                  type="submit"
-                  variant="secondary"
-                  className="self-start"
-                  disabled={busy === "settings" || busy === "safety"}
-                  data-testid="button-keep-keywords"
-                >
-                  {busy === "safety" ? "Keeping..." : "Keep keywords"}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="submit"
+                    variant="secondary"
+                    disabled={busy === "settings" || busy === "safety"}
+                    data-testid="button-keep-keywords"
+                  >
+                    {busy === "safety" ? "Keeping..." : "Keep keywords"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={busy === "settings" || busy === "safety"}
+                    onClick={() =>
+                      setKeywordsDraft(
+                        sanitizeModerationKeywords([
+                          ...sanitizeModerationKeywords(keywordsDraft),
+                          ...SUGGESTED_MODERATION_KEYWORD_LIST,
+                        ]).join("\n"),
+                      )
+                    }
+                    data-testid="button-add-suggested-keywords"
+                  >
+                    Add suggested
+                  </Button>
+                </div>
               </form>
             </section>
 

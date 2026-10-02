@@ -36,7 +36,8 @@ async function onPush(event) {
   }
 
   const isBurn = kind === "burn";
-  const dest = isBurn ? "/inbox" : "/";
+  const isHearth = kind.startsWith("hearth-");
+  const dest = isBurn ? "/inbox" : isHearth ? "/hearth" : "/";
   const tag = isBurn ? "pidaka-burn" : `pidaka-${kind}`;
 
   const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
@@ -46,6 +47,11 @@ async function onPush(event) {
       client.postMessage({ kind: "burn", n: unread, title, body });
     }
     return;
+  }
+  if (isHearth) {
+    for (const client of windows) {
+      client.postMessage({ kind, title, body });
+    }
   }
 
   await self.registration.showNotification(title, {
@@ -60,6 +66,20 @@ async function onPush(event) {
 
 async function openApp(dest) {
   const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  const already = windows.find((client) => {
+    try {
+      return new URL(client.url).pathname.startsWith(dest) && dest !== "/";
+    } catch {
+      return false;
+    }
+  });
+  if (already && "focus" in already) {
+    return already.focus();
+  }
+  if (dest.startsWith("/hearth")) {
+    if (self.clients.openWindow) return self.clients.openWindow(dest);
+    return;
+  }
   for (const client of windows) {
     if ("focus" in client) {
       if ("navigate" in client) {

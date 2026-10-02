@@ -93,3 +93,27 @@ export async function notifyAccountEvent(userId: string, kind: AccountAlertKind)
   const payload = accountAlertPayload(kind);
   await Promise.all([sendWebPush(userId, payload), notifyAccountViaFcm(userId, payload)]);
 }
+
+/** Hearth devices share the push_subscriptions table under an owner id no user uuid can take. */
+export const HEARTH_PUSH_OWNER = "hearth";
+const HEARTH_ALERT_GAP_MS = 15_000;
+let lastHearthAlertAt = 0;
+
+export async function notifyHearthHeld(reasons: string) {
+  const now = Date.now();
+  if (now - lastHearthAlertAt < HEARTH_ALERT_GAP_MS) return;
+  lastHearthAlertAt = now;
+  await sendWebPush(HEARTH_PUSH_OWNER, {
+    kind: "hearth-held",
+    title: "A post is waiting in the hearth",
+    body: reasons ? `Held for: ${reasons}` : "Held by the keyword check.",
+  });
+}
+
+export async function sendHearthTestAlert() {
+  await sendWebPush(HEARTH_PUSH_OWNER, {
+    kind: "hearth-test",
+    title: "Hearth alerts are on",
+    body: "Held posts will show up here.",
+  });
+}

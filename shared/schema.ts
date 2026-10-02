@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer, timestamp, primaryKey, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { MODERATION_KEYWORD_LIMIT, MODERATION_KEYWORD_MAX_LENGTH } from "./moderation";
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -277,7 +278,10 @@ export const wallSettingsPatchSchema = z.object({
   postingOpen: z.boolean().optional(),
   burningOpen: z.boolean().optional(),
   safetyCheckOpen: z.boolean().optional(),
-  moderationKeywords: z.array(z.string().max(48)).max(100).optional(),
+  moderationKeywords: z
+    .array(z.string().max(MODERATION_KEYWORD_MAX_LENGTH))
+    .max(MODERATION_KEYWORD_LIMIT, `Keep it to ${MODERATION_KEYWORD_LIMIT} keywords`)
+    .optional(),
   noticeOpen: z.boolean().optional(),
   noticeTitle: z.string().max(80, "Keep the header under 80 characters").optional(),
   notice: z.string().max(280, "Keep the notice under 280 characters").optional(),
