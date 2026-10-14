@@ -133,6 +133,9 @@ export function metaForPath(pathname: string): PageMeta {
 }
 
 export const ROBOTS_INDEX = "index, follow, max-image-preview:large";
+/** Bump the version when og.png changes; link previews cache by URL. */
+export const OG_IMAGE_PATH = "/og.png?v=2";
+export const LOGO_PATH = "/logo.png?v=2";
 export const ROBOTS_NOINDEX = "noindex, nofollow";
 
 function escapeAttr(value: string) {
@@ -155,7 +158,7 @@ export function structuredData(origin: string, extra: object[] = []) {
         name: OPERATOR.legalName,
         url: OPERATOR.website,
         email: OPERATOR.email,
-        logo: `${base}/logo.png`,
+        logo: `${base}${LOGO_PATH}`,
       },
       {
         "@type": "WebSite",
@@ -183,7 +186,7 @@ export function applyDocumentMeta(html: string, pathname: string, origin = "", e
   const meta = metaForPath(pathname);
   const path = normalizePath(pathname);
   const canonical = origin ? `${origin}${path}` : path;
-  const image = origin ? `${origin}/og.png` : "/og.png";
+  const image = `${origin}${OG_IMAGE_PATH}`;
   const ldJson = meta.index
     ? `<script type="application/ld+json">${structuredData(origin, extras.schema)}</script>\n  </head>`
     : "</head>";

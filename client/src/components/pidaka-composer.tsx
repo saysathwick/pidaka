@@ -174,7 +174,7 @@ export function ComposeFab({
             onClick={onClick}
             data-testid="button-compose-anywhere"
           >
-            <BurningCookieIcon className="h-4 w-4 mr-2" isLit />
+            <BurningCookieIcon className="h-4 w-4" isLit />
             Drop it
           </Button>
         </motion.div>

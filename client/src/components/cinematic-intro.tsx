@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Check, Flame, Globe2, LockKeyhole, RotateCcw } from "lucide-react";
-import { PidakaMark } from "@/components/pidaka-logo";
+import { PidakaMark, PidakaWordmark } from "@/components/pidaka-logo";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 
 const INTRO_KEY = "pidaka_intro_seen";
@@ -60,7 +60,7 @@ export function CinematicIntro({ onComplete }: { onComplete: () => void }) {
       <div className="intro-orbit intro-orbit-one" aria-hidden="true" />
       <div className="intro-orbit intro-orbit-two" aria-hidden="true" />
       <header className="intro-header">
-        <div className="flex items-center gap-3"><PidakaMark className="h-9 w-9" /><span className="font-serif text-lg tracking-[0.24em]">PIDAKA</span></div>
+        <div className="flex items-center gap-3"><PidakaMark className="h-9 w-9" onDark /><PidakaWordmark className="h-[20px]" onDark /></div>
         <button className="intro-text-button" onClick={finish}>Explore the wall <ArrowRight size={16} /></button>
       </header>
       <main className="intro-main">

@@ -246,10 +246,10 @@ export function PidakaCard({ pidaka, onBurn, arrived, onSeen }: PidakaCardProps)
                   event.stopPropagation();
                   onBurn(pidaka.id);
                 }}
-                className="h-7 px-2 text-primary"
+                className="h-7 gap-1 px-2 text-primary"
                 data-testid={`button-burn-${pidaka.id}`}
               >
-                <BurningCookieIcon className="h-3.5 w-3.5 mr-1" isLit />
+                <BurningCookieIcon className="h-3.5 w-3.5" isLit />
                 Burn
               </Button>
             )}

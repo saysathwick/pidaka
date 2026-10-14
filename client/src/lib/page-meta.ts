@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { metaForPath, normalizePath, ROBOTS_INDEX, ROBOTS_NOINDEX } from "@shared/site";
+import { metaForPath, normalizePath, OG_IMAGE_PATH, ROBOTS_INDEX, ROBOTS_NOINDEX } from "@shared/site";
 
 function setAttr(selector: string, attr: "content" | "href", value: string) {
   const el = document.head.querySelector(selector);
@@ -21,8 +21,8 @@ export function usePageMeta(pathname: string) {
     const canonical = `${origin}${normalizePath(pathname)}`;
     setAttr('link[rel="canonical"]', "href", canonical);
     setAttr('meta[property="og:url"]', "content", canonical);
-    setAttr('meta[property="og:image"]', "content", `${origin}/og.png`);
-    setAttr('meta[name="twitter:image"]', "content", `${origin}/og.png`);
+    setAttr('meta[property="og:image"]', "content", `${origin}${OG_IMAGE_PATH}`);
+    setAttr('meta[name="twitter:image"]', "content", `${origin}${OG_IMAGE_PATH}`);
     return () => {
       document.title = previous;
     };

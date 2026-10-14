@@ -62,7 +62,7 @@ export function BurnRitual({ pidaka, open, sending, onClose, onSend }: BurnRitua
             <div className="flex items-center gap-2.5">
               <div className="relative">
                 <div className="absolute -inset-2 rounded-full bg-primary/20 blur-md" />
-                <BurningCookieIcon className="relative h-5 w-5" isLit />
+                <BurningCookieIcon className="relative h-5 w-5 text-primary" isLit />
               </div>
               <h2 id="burn-ritual-title" className="font-serif text-xl" data-testid="text-burn-dialog-title">
                 Burn this. They will not know.
@@ -110,9 +110,10 @@ export function BurnRitual({ pidaka, open, sending, onClose, onSend }: BurnRitua
                   onSend(message.trim());
                 }}
                 disabled={!message.trim() || sending}
+                className="gap-1.5"
                 data-testid="button-send-burn"
               >
-                <BurningCookieIcon className="h-4 w-4 mr-1.5" isLit />
+                <BurningCookieIcon className="h-4 w-4" isLit />
                 {sending ? "Burning..." : "Send the burn"}
               </Button>
               </div>

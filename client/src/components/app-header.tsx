@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { PidakaMark } from "@/components/pidaka-logo";
+import { PidakaMark, PidakaWordmark } from "@/components/pidaka-logo";
 import { AppMenu } from "@/components/app-menu";
 import { cn } from "@/lib/utils";
 
@@ -97,13 +97,12 @@ export function AppHeader({
             type="button"
             className="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left hover-elevate"
             onClick={() => navigate("/")}
+            aria-label="Pidaka home"
             data-testid="text-brand"
           >
             <PidakaMark className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" isLit={place === "burns" || Boolean(user)} />
             <span className="flex min-w-0 flex-col justify-center">
-              <span className="font-serif text-lg leading-none tracking-[0.18em] uppercase text-[#3d2a1a] dark:text-[#d4c4a8] sm:text-xl sm:tracking-[0.22em]">
-                Pidaka
-              </span>
+              <PidakaWordmark className="h-[18px] sm:h-[21px]" />
               {place === "wall" && (
                 <span className="mt-0.5 hidden font-serif text-[10px] tracking-wide text-[#6b5340] dark:text-[#a89078] sm:mt-1 sm:block">
                   pidaka.in
