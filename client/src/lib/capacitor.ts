@@ -1,6 +1,5 @@
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
-import { StatusBar, Style } from "@capacitor/status-bar";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 
@@ -8,12 +7,10 @@ export async function initNativeChrome() {
   if (!Capacitor.isNativePlatform()) return;
   document.documentElement.classList.add("native-app");
   try {
-    // Draw under the system bars; CSS --safe-top / --safe-bottom keep chrome clear.
-    await StatusBar.setOverlaysWebView({ overlay: true });
-    await StatusBar.setStyle({ style: Style.Dark });
-    await StatusBar.setBackgroundColor({ color: "#070709" });
+    // The app is edge-to-edge; CSS --safe-top / --safe-bottom keep chrome clear of the bars.
+    await SystemBars.setStyle({ style: SystemBarsStyle.Dark });
   } catch {
-    // status bar API unavailable on this device
+    // system bars API unavailable on this device
   }
 }
 
